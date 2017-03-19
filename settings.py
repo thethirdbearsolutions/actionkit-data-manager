@@ -107,7 +107,6 @@ INSTALLED_APPS = [
     'django.contrib.flatpages',
     'django.contrib.staticfiles',
     'django.contrib.admin',
-    'dbtemplates',
     'debug_toolbar',
     'djangohelpers',
     'djsupervisor',
@@ -124,7 +123,6 @@ if 'TASKMAN_LOGGER_CLASS' in os.environ:
     TASKMAN_LOGGER_CLASS = os.environ['TASKMAN_LOGGER_CLASS']
     
 TEMPLATE_LOADERS = (
-    'dbtemplates.loader.Loader',
     'django.template.loaders.filesystem.Loader',
     'django.template.loaders.app_directories.Loader',
 )
