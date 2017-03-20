@@ -1,9 +1,50 @@
-from main.forms import BatchForm, get_task_log
+import datetime
+import decimal
 from django import forms
+from django.db import connections
+import gzip
+import json
+import traceback
+
 from actionkit import Client
 from actionkit.rest import client as RestClient
-from actionkit.models import CoreAction, CoreActionField
-import traceback
+from actionkit.models import CoreAction, CoreActionField, QueryReport
+
+from main.forms import BatchForm, get_task_log
+
+dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
+
+class PublishReportResultsForm(BatchForm):
+    report_id = forms.IntegerField()
+    filename = forms.CharField(max_length=255)
+    gzip = forms.CharField(max_length=10)
+
+    def run_sql(self, sql):
+        cursor = connections['ak'].cursor()
+        cursor.execute(sql)
+
+        row = cursor.fetchone()
+        while row:
+            row = [float(i) if isinstance(i, decimal.Decimal) else i for i in row]
+            yield dict(zip([i[0] for i in cursor.description], row))
+            row = cursor.fetchone()
+
+    def run(self, task, rows):
+        ak = Client()
+
+        task_log = get_task_log()
+
+        report = QueryReport.objects.using("ak").get(report_ptr__id=self.cleaned_data['report_id'])
+        rows = list(self.run_sql(report.sql))
+
+        if self.cleaned_data['gzip'] == "yes":
+            fp = gzip.GzipFile("/tmp/%s.json.gz" % self.cleaned_data['filename'], 'w')
+        else:
+            fp = open("/tmp/%s.json" % self.cleaned_data['filename'], 'w')
+        fp.write(json.dumps(rows, default=dthandler, indent=2))
+        fp.close()
+
+        return 1, 1, 0 
 
 class UserfieldJobForm(BatchForm):
     help_text = """
