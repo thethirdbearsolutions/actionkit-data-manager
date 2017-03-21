@@ -34,7 +34,10 @@ def run_batch_job(task):
         message = traceback.format_exc()
         subject = "[ActionKit Data Manager] Task %s (%s) failed :-(" % (task.id, name)
     else:
-        message = "Num rows: %s.  Success count: %s.  Error count: %s." % (
+        if hasattr(form, 'make_nonfailed_email_message'):
+            message = form.make_nonfailed_email_message(task)
+        else:
+            message = "Num rows attempted: %s.  Success count: %s.  Error count: %s." % (
             task.num_rows, task.success_count, task.error_count)
         if task.error_count:
             subject = "[ActionKit Data Manager] Task %s (%s) completed with errors =/" % (task.id, name)
@@ -42,6 +45,7 @@ def run_batch_job(task):
             subject = "[ActionKit Data Manager] Task %s (%s) succeeded =)" % (task.id, name)
     message += "\n\nCheck it out here: http://%s/admin/main/jobtask/%s/" % (settings.SITE_DOMAIN, task.id)
     message += "\nThe job configuration is here: http://%s/admin/main/batchjob/%s/" % (settings.SITE_DOMAIN, job.id)
+    message += "\nMake it recurring here: http://%s/schedule/%s/" % (settings.SITE_DOMAIN, job.id)
 
     task.completed_on = datetime.datetime.now()
     task.save()
@@ -55,6 +59,7 @@ def run_batch_job(task):
                     fail_silently=False)
 
     print "Sent %s mails with subject %s; job %s completed; %s rows" % (num, subject, job.id, task.num_rows)
+    return message
 
 @periodic_task(run_every=datetime.timedelta(seconds=60))
 def run_recurring_tasks():

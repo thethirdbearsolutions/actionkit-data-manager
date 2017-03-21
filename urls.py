@@ -9,6 +9,9 @@ urlpatterns = patterns(
     url(r'^batch-job/(?P<type>\w+)/$',
         'main.views.batch_job', 
         name='batch_job'),
+    url(r'^schedule/(?P<id>\d+)/$',
+        'main.views.schedule',
+        name='schedule'),
 
     url(r'^admin/', include(admin.site.urls)),
     )

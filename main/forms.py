@@ -9,6 +9,12 @@ from actionkit.rest import client as RestClient
 from actionkit.models import CoreUser
 import json
 
+from main.models import RecurringTask
+class RecurringForm(forms.ModelForm):
+    class Meta:
+        model = RecurringTask
+        fields = ['period', 'period_unit']
+
 class JobError(RuntimeError):
     def __init__(self, errors):
         self.errors = errors

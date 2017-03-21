@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Make recurring: {{ job.title }}</h1>
+<pre>
+  {{ job.sql }}
+</pre>
+
+{% if already %}
+<div class="messages alert alert-message alert-warn">
+  This job is already scheduled.
+  {% for already in already %}
+  <p>
+    &bull; Every {{ already.period }} {{ already.period_unit }}, last started on {{ already.last_started_on }} {% if already.is_running %}<strong>Running now!</strong>{% else %}{% if not already.is_active %}<strong>Inactive</strong>{% endif %}{% endif %}
+  </p>
+  {% endfor %}
+</div>
+{% endif %}
+<form method="POST">
+  {% csrf_token %}
+  {{ form.as_p }}
+
+  <input type="submit" />
+</form>
+
+{% endblock %}
+
+
+

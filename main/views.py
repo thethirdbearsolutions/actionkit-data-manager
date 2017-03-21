@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.http import (HttpResponse,
                          HttpResponseForbidden, 
                          HttpResponseNotFound)
-from django.shortcuts import redirect 
+from django.shortcuts import redirect, get_object_or_404
 from djangohelpers import (rendered_with,
                            allow_http)
 from actionkit.models import CoreAction
@@ -13,12 +13,33 @@ from actionkit import *
 
 from django.db import connections
 
+from main.forms import RecurringForm
 from main.tasks import run_batch_job
 from main.models import BatchJob, JobTask
 
 
 import csv
 import io
+
+
+@allow_http("GET", "POST")
+@rendered_with("main/schedule.html")
+def schedule(request, id):
+    form = RecurringForm(data=request.POST if request.method == 'POST' else None)
+    job = BatchJob.objects.filter(id=id)
+    if not request.user.is_superuser:
+        job = job.filter(created_by=request.user)
+    job = get_object_or_404(job)
+    already = list(RecurringTask.objects.filter(parent_job=job))
+
+    if request.method == 'POST':
+        if form.is_valid():
+            scheduled = form.save(commit=False)
+            scheduled.parent_job = job
+            scheduled.save()
+            return redirect(".")
+    return {"form": form, "job": job, "already": already}
+
 
 @allow_http("GET", "POST")
 @rendered_with("main/batch_job.html")
@@ -62,10 +83,14 @@ def batch_job(request, type):
     task = JobTask(parent_job=job)
     task.save()
 
-    run_batch_job.delay(task)
+    if request.POST.get("submit") == "Run Now, Synchronously":
+        result = run_batch_job(task)
+        return HttpResponse(result, content_type="text/plain")
+    else:
+        run_batch_job.delay(task)
 
-    resp = redirect(".")
-    resp['Location'] += '?' + request.META['QUERY_STRING']
+        resp = redirect(".")
+        resp['Location'] += '?' + request.META['QUERY_STRING']
     return resp
 
 from main import task_registry

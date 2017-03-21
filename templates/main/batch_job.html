@@ -42,7 +42,8 @@
 
   <input type="hidden" name="records" value="{{ rows|to_json }}" />
 
-  <input type="submit" value="Save This Job!" />
+  <input type="submit" name="submit" value="Save This Job!" />
+  <input type="submit" name="submit" value="Run Now, Synchronously" />
 </form>
 {% endif %}
 {% endblock %}

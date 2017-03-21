@@ -4,6 +4,7 @@ from django import forms
 from django.db import connections
 import gzip
 import json
+import subprocess
 import traceback
 
 from actionkit import Client
@@ -17,7 +18,14 @@ dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) el
 class PublishReportResultsForm(BatchForm):
     report_id = forms.IntegerField()
     filename = forms.CharField(max_length=255)
-    gzip = forms.CharField(max_length=10)
+    wrapper = forms.CharField(max_length=255)
+
+    def make_nonfailed_email_message(self, task):
+        message = """Report results have been generated and published to the following URL:
+
+https://s3.amazonaws.com/thirdbear-backups/aclu/public/%s
+""" % self.cleaned_data['filename']
+        return message
 
     def run_sql(self, sql):
         cursor = connections['ak'].cursor()
@@ -37,13 +45,16 @@ class PublishReportResultsForm(BatchForm):
         report = QueryReport.objects.using("ak").get(report_ptr__id=self.cleaned_data['report_id'])
         rows = list(self.run_sql(report.sql))
 
-        if self.cleaned_data['gzip'] == "yes":
-            fp = gzip.GzipFile("/tmp/%s.json.gz" % self.cleaned_data['filename'], 'w')
-        else:
-            fp = open("/tmp/%s.json" % self.cleaned_data['filename'], 'w')
-        fp.write(json.dumps(rows, default=dthandler, indent=2))
+        fp = open("/tmp/%s" % self.cleaned_data['filename'], 'w')
+        data = json.dumps(rows, default=dthandler, indent=2)
+        if self.cleaned_data.get("wrapper") and '%' in self.cleaned_data['wrapper']:
+            data = self.cleaned_data['wrapper'] % data
+        fp.write(data)
         fp.close()
 
+        subprocess.call(["s3cmd", "put", "--acl-public",
+                         "/tmp/%s" % self.cleaned_data['filename'],
+                         "s3://thirdbear-backups/aclu/public/"])
         return 1, 1, 0 
 
 class UserfieldJobForm(BatchForm):
