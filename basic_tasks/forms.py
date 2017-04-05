@@ -2,9 +2,11 @@ import datetime
 import decimal
 from django import forms
 from django.db import connections
+import gdata.spreadsheet.service
 import gzip
 import json
 import subprocess
+import requests
 import traceback
 
 from actionkit import Client
@@ -14,6 +16,56 @@ from actionkit.models import CoreAction, CoreActionField, QueryReport
 from main.forms import BatchForm, get_task_log
 
 dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
+
+class ActionkitSpreadsheetForm(BatchForm):
+
+    exclude = forms.CharField(label="Comma separated list of IDs to exclude", required=True)
+    google_client_id = forms.CharField(label="Client ID", required=True)
+    google_client_secret = forms.CharField(label="Client secret", required=True)
+    google_refresh_token = forms.CharField(label="Refresh token", required=True)
+    google_spreadsheet_id = forms.CharField(label="Spreadsheet ID", required=True)
+    google_worksheet_id = forms.CharField(label="Worksheet ID", required=True)
+
+    def run(self, task, rows):
+
+        task_log = get_task_log()
+
+        resp = requests.post("https://accounts.google.com/o/oauth2/token", data={
+            "grant_type": "refresh_token",
+            "refresh_token": self.cleaned_data['google_refresh_token'],
+            "client_id": self.cleaned_data['google_client_id'],
+            "client_secret": self.cleaned_data['google_client_secret']})
+        token = resp.json()['access_token']
+        spr_client = gdata.spreadsheet.service.SpreadsheetsService(additional_headers={"Authorization": "Bearer %s" % token})
+
+        exclude = [int(i) for i in self.cleaned_data['exclude'].split(",")]
+        n_errors = n_rows = n_success = 0
+
+        for row in rows:
+
+            n_rows += 1
+            id = row.pop("primary_key")
+            if id in exclude:
+                continue
+            obj = {}
+            for key, val in row.items():
+                obj[key.lower()] = unicode(val)
+            try:
+                spr_client.InsertRow(obj, 
+                                     self.cleaned_data['google_spreadsheet_id'], 
+                                     self.cleaned_data['google_worksheet_id'])
+            except Exception, e:
+                n_errors += 1
+                task_log.error_log(task, {"row": obj, "error": str(e)})
+            else:
+                n_success += 1
+                exclude.append(id)
+        exclude = ','.join([str(i) for i in exclude])
+        task.form_data = json.dumps({"exclude": exclude})
+        task.save()
+
+        return n_rows, n_success, n_errors
+
 
 class PublishReportResultsForm(BatchForm):
     report_id = forms.IntegerField()

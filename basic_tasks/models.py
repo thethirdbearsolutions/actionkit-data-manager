@@ -2,7 +2,8 @@ from main.task_registry import register_task
 from basic_tasks.forms import (UnsubscribeAndActJobForm,
                                ActionfieldRenameJobForm,
                                UserfieldJobForm,
-                               PublishReportResultsForm)
+                               PublishReportResultsForm,
+                               ActionkitSpreadsheetForm)
 
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
@@ -13,3 +14,5 @@ register_task("ActionfieldRenameJob",
               "Rename Actionfields", ActionfieldRenameJobForm)
 register_task("PublishReportResultsJob",
               "Run and Publish Reports", PublishReportResultsForm)
+register_task("ActionkitSpreadsheetJob", 
+              "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
