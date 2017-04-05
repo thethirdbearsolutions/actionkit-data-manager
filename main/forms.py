@@ -45,10 +45,21 @@ class BatchForm(forms.Form):
     title = forms.CharField(label="Job Title", required=False)
 
     @classmethod
-    def from_job(cls, job):
+    def from_job(cls, job, recurrence=None):
         import json
         data = json.loads(job.form_data)
         data['sql'] = job.sql
+
+        if recurrence is not None:
+            try:
+                last_run = recurrence.latest_completed_run()
+            except IndexError:
+                overrides = "{}"
+            else:
+                overrides = last_run.form_data or "{}"
+            overrides = json.loads(overrides)
+            for key in overrides:
+                data[key] = overrides[key]
 
         form = cls(data=data)
         if not form.is_valid():

@@ -32,8 +32,8 @@ class BatchJob(models.Model):
     def form_factory(self):
         return task_registry.get_task(self.type).form_class
 
-    def get_form(self):
-        return self.form_factory.from_job(self)
+    def get_form(self, recurrence=None):
+        return self.form_factory.from_job(self, recurrence=recurrence)
 
     def run_sql(self):
         cursor = connections['ak'].cursor()
@@ -91,6 +91,8 @@ class JobTask(models.Model):
     num_rows = models.IntegerField(default=0)
     success_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
+
+    form_data = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
         job = self.parent_job
