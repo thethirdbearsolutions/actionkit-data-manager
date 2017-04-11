@@ -66,6 +66,37 @@ class ActionkitSpreadsheetForm(BatchForm):
 
         return n_rows, n_success, n_errors
 
+class EventFieldCreateForm(BatchForm):
+    field_name = forms.CharField(label="Event Field Name", required=True)
+    field_value = forms.CharField(label="Event Field Value", required=False)
+
+    def run(self, task, rows):
+        field_value = self.cleaned_data.get("field_value").strip() or None
+        field_name = self.cleaned_data['field_name']
+
+        ak = Client()
+        n_rows = n_success = n_error = 0
+
+        task_log = get_task_log()
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+            assert row.get('event_id') and int(row['event_id'])
+
+            try:
+                fields = ak.Event.get_custom_fields({"id": row['event_id']})
+                fields['id'] = row['event_id']
+                fields[field_name] = field_value or row['field_value']
+                resp = ak.Event.set_custom_fields(fields)
+            except Exception, e:
+                n_error += 1
+                resp = {"log_id": row['event_id'], "error": traceback.format_exc()}
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+                task_log.success_log(task, resp)
+
+        return n_rows, n_success, n_error
 
 class PublishReportResultsForm(BatchForm):
     report_id = forms.IntegerField()
