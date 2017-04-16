@@ -24,7 +24,7 @@ def run_batch_job(task):
         recurrence = task.parent_recurring_task
         job = recurrence.parent_job 
 
-    form = job.get_form()
+    form = job.get_form(recurrence=recurrence)
     rows = job.run_sql()
 
     name = job.title

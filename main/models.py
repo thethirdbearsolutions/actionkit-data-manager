@@ -72,6 +72,9 @@ class RecurringTask(models.Model):
     def latest_run(self):
         return JobTask.objects.filter(parent_recurring_task=self).order_by("-created_on")[0]
 
+    def latest_completed_run(self):
+        return JobTask.objects.filter(parent_recurring_task=self).exclude(completed_on=None).order_by("-created_on")[0]
+
     def stale_runs(self):
         """ 
         Returns all but the most recent two runs of this job.
