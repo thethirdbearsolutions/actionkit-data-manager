@@ -99,7 +99,7 @@ class EventFieldCreateForm(BatchForm):
         return n_rows, n_success, n_error
 
 class PublishReportResultsForm(BatchForm):
-    report_id = forms.IntegerField()
+    report_id = forms.IntegerField(required=False)
     filename = forms.CharField(max_length=255)
     wrapper = forms.CharField(max_length=255)
 
@@ -125,8 +125,20 @@ https://s3.amazonaws.com/thirdbear-backups/aclu/public/%s
 
         task_log = get_task_log()
 
-        report = QueryReport.objects.using("ak").get(report_ptr__id=self.cleaned_data['report_id'])
-        rows = list(self.run_sql(report.sql))
+        if self.cleaned_data.get("report_id"):
+            report = QueryReport.objects.using("ak").get(report_ptr__id=self.cleaned_data['report_id'])
+            rows = list(self.run_sql(report.sql))
+        else:
+            _rows = {}
+            for row in rows:
+                report = QueryReport.objects.using("ak").get(report_ptr__id=row['report_id'])
+                result = list(self.run_sql(report.sql))
+                if (row.get("format") or "").startswith('json0['):
+                    result = result[0]
+                    result = result[row['format'].split("[")[1].split("]")[0]]
+                    result = json.loads(result)
+                _rows[row['key']] = result
+            rows = _rows
 
         fp = open("/tmp/%s" % self.cleaned_data['filename'], 'w')
         data = json.dumps(rows, default=dthandler, indent=2)
