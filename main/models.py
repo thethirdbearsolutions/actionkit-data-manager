@@ -40,9 +40,11 @@ class BatchJob(models.Model):
     def get_form(self, recurrence=None):
         return self.form_factory.from_job(self, recurrence=recurrence)
 
-    def run_sql(self):
+    def run_sql(self, ctx={}):
         cursor = connections['ak'].cursor()
         sql = self.sql
+        if ctx and '{form[' in sql:
+            sql = sql.format(form=ctx)
         cursor.execute(sql)
 
         row = cursor.fetchone()
@@ -77,8 +79,11 @@ class RecurringTask(models.Model):
     def latest_run(self):
         return JobTask.objects.filter(parent_recurring_task=self).order_by("-created_on")[0]
 
+    def completed_runs(self):
+        return JobTask.objects.filter(parent_recurring_task=self).exclude(completed_on=None).order_by("-created_on")
+
     def latest_completed_run(self):
-        return JobTask.objects.filter(parent_recurring_task=self).exclude(completed_on=None).order_by("-created_on")[0]
+        return self.completed_runs()[0]
 
     def stale_runs(self):
         """ 

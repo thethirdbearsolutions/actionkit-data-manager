@@ -46,17 +46,16 @@ class BatchForm(forms.Form):
 
     @classmethod
     def from_job(cls, job, recurrence=None):
-        import json
         data = json.loads(job.form_data)
         data['sql'] = job.sql
 
         if recurrence is not None:
-            try:
-                last_run = recurrence.latest_completed_run()
-            except IndexError:
-                overrides = "{}"
-            else:
-                overrides = last_run.form_data or "{}"
+            overrides = "{}"
+            last_runs = recurrence.completed_runs()
+            for run in last_runs:
+                if run.form_data and run.form_data != "{}":
+                    overrides = run.form_data
+                    break
             overrides = json.loads(overrides)
             for key in overrides:
                 data[key] = overrides[key]
@@ -67,15 +66,17 @@ class BatchForm(forms.Form):
 
         return form
 
+    def get_data(self):
+        cd = dict(self.cleaned_data)
+        cd.pop('sql')
+        return cd
+
     def fill_job(self, job):
         job.sql = self.cleaned_data['sql']
         if self.cleaned_data.get("title", "").strip():
             job.title = self.cleaned_data['title'].strip()
 
-        import json
-        cd = dict(self.cleaned_data)
-        cd.pop('sql')
-        job.form_data = json.dumps(cd)
+        job.form_data = json.dumps(self.get_data())
         return job
 
 
