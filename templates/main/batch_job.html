@@ -1,11 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style type="text/css">
+input, textarea, select, .uneditable-input {
+    min-width: 400px;
+}
+</style>
+
 {{ form.help_text|safe }}
 
 <hr />
 <form method="GET">
-  {{ form.as_p }}
+  <table>
+  {{ form.as_table }}
+  </table>
 
   <input type="submit" value="Preview" />
 </form>
