@@ -154,6 +154,8 @@ BROKER_VHOST = os.environ['BROKER_VHOST']
 
 EMAIL_HOST = os.environ['EMAIL_HOST']
 EMAIL_PORT = os.environ['EMAIL_PORT']
+if 'EMAIL_BACKEND' in os.environ:
+    EMAIL_BACKEND = os.environ['EMAIL_BACKEND']
 if 'EMAIL_HOST_USER' in os.environ:
     EMAIL_HOST_USER = os.environ['EMAIL_HOST_USER']
 if 'EMAIL_HOST_PASSWORD' in os.environ:
