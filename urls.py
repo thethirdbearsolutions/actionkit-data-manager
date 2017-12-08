@@ -12,6 +12,9 @@ urlpatterns = patterns(
     url(r'^schedule/(?P<id>\d+)/$',
         'main.views.schedule',
         name='schedule'),
+    url(r'^logs/(?P<id>\d+)/(?P<type>\w+)/$',
+        'main.views.get_logs',
+        name='get_logs'),
 
     url(r'^admin/', include(admin.site.urls)),
     )

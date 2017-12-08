@@ -15,12 +15,22 @@ from django.db import connections
 
 from main.forms import RecurringForm
 from main.tasks import run_batch_job
-from main.models import BatchJob, JobTask
+from main.models import BatchJob, JobTask, LogEntry
 
 
 import csv
+import json
 import io
 
+
+def get_logs(request, id, type):
+    task = JobTask.objects.filter(id=id)
+    logs = LogEntry.objects.filter(task=task, type=type)
+    if 'filter' in request.GET:
+        logs = logs.filter(data__icontains=request.GET['filter'])
+    return HttpResponse(json.dumps(
+        [json.loads(i.data) for i in logs],
+        indent=2), content_type="application/json")
 
 @allow_http("GET", "POST")
 @rendered_with("main/schedule.html")
