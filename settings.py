@@ -46,7 +46,7 @@ socket.setdefaulttimeout(5)
 import os
 PROJECT_PATH = os.path.realpath(os.path.dirname(__file__))
 MEDIA_ROOT = os.path.join(PROJECT_PATH, 'media/')
-STATIC_ROOT = os.path.join(PROJECT_PATH, 'static/')
+STATIC_ROOT = os.environ.get("STATIC_ROOT") or os.path.join(PROJECT_PATH, 'static/')
 MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
 
