@@ -1,7 +1,7 @@
 from datetime import datetime
 from django import forms
 from django.conf import settings
-from django.contrib.localflavor.us import forms as usforms
+from localflavor.us import forms as usforms
 import traceback
 
 from actionkit import Client
@@ -19,13 +19,13 @@ class JobError(RuntimeError):
     def __init__(self, errors):
         self.errors = errors
 
-from django.utils.datastructures import SortedDict
+from collections import OrderedDict
 from django.db import connections
 def dictfetchall(cursor):
     "Returns all rows from a cursor as a dict"
     desc = cursor.description
     return [
-        SortedDict(zip([col[0] for col in desc], row))
+        OrderedDict(zip([col[0] for col in desc], row))
         for row in cursor.fetchall()
     ]
 

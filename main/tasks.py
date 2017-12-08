@@ -1,5 +1,3 @@
-from celery.decorators import task, periodic_task
-from celery.task.schedules import crontab
 import traceback
 
 from actionkit import Client
@@ -16,8 +14,11 @@ from dateutil.relativedelta import relativedelta
 import json
 from django.conf import settings
 
-@task()
-def run_batch_job(task):
+from akdata.celery import app
+
+@app.task()
+def run_batch_job(task_id):
+    task = JobTask.objects.get(id=task_id)
     recurrence = None
     job = task.parent_job 
     if job is None:
@@ -70,7 +71,7 @@ def run_batch_job(task):
     print "Sent %s mails with subject %s; job %s completed; %s rows" % (num, subject, job.id, task.num_rows)
     return message
 
-@periodic_task(run_every=datetime.timedelta(seconds=60))
+@app.task()
 def run_recurring_tasks():
 
     print "Looking for tasks..."
@@ -108,5 +109,5 @@ def run_recurring_tasks():
         task = JobTask(parent_recurring_task=r)
         task.save()
 
-        run_batch_job.delay(task)
+        run_batch_job.delay(task.id)
 

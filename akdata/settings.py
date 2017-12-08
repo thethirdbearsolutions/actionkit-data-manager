@@ -4,13 +4,14 @@ SITE_DOMAIN = os.environ['SITE_DOMAIN']
 # Django settings for skel project.
 
 DEBUG = True
-TEMPLATE_DEBUG = DEBUG
 
 ADMINS = [
     ("Admin", i) for i in os.environ['ADMIN_EMAILS'].split(",")
 ]
 
 MANAGERS = ADMINS
+
+ALLOWED_HOSTS = os.environ["ALLOWED_HOSTS"].split(",")
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -44,7 +45,7 @@ import socket
 socket.setdefaulttimeout(5)
 
 import os
-PROJECT_PATH = os.path.realpath(os.path.dirname(__file__))
+PROJECT_PATH = os.path.realpath(os.path.dirname(os.path.dirname(__file__)))
 MEDIA_ROOT = os.path.join(PROJECT_PATH, 'media/')
 STATIC_ROOT = os.environ.get("STATIC_ROOT") or os.path.join(PROJECT_PATH, 'static/')
 MEDIA_URL = '/media/'
@@ -71,13 +72,6 @@ STATICFILES_FINDERS = (
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 DEFAULT_FROM_EMAIL = os.environ['DEFAULT_FROM_EMAIL']
 
-# List of callables that know how to import templates from various sources.
-TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.Loader',
-#     'django.template.loaders.eggs.Loader',
-)
-
 MIDDLEWARE_CLASSES = (
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -92,11 +86,30 @@ ANONYMOUS_PATHS = ['/static/', '/admin/', '/accounts/']
 
 ROOT_URLCONF = 'urls'
 
-TEMPLATE_DIRS = (
-    os.path.join(PROJECT_PATH, "templates"),
-    # Always use forward slashes, even on Windows.
-    # Don't forget to use absolute paths, not relative paths.
-)
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            os.path.join(PROJECT_PATH, "templates"),
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'debug': DEBUG,
+            'context_processors': [
+                # Insert your TEMPLATE_CONTEXT_PROCESSORS here or use this
+                # list if you haven't customized them:
+                'django.contrib.auth.context_processors.auth',
+                'django.template.context_processors.debug',
+                'django.template.context_processors.i18n',
+                'django.template.context_processors.media',
+                'django.template.context_processors.static',
+                'django.template.context_processors.tz',
+                'django.contrib.messages.context_processors.messages',
+                "django.template.context_processors.request",
+            ],
+        },
+    },
+]
 
 INSTALLED_APPS = [
     'django.contrib.auth',
@@ -109,11 +122,12 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'debug_toolbar',
     'djangohelpers',
-    'djsupervisor',
     'djcelery',
+    'localflavor',
+    'actionkit',
     'basic_tasks',
     'main',
-    ]
+]
 
 TASKMAN_PLUGIN_PACKAGES = [i for i in os.environ.get("TASKMAN_PLUGIN_PACKAGES", "").split(",")
                            if i]
@@ -122,22 +136,6 @@ for app_name in TASKMAN_PLUGIN_PACKAGES:
 if 'TASKMAN_LOGGER_CLASS' in os.environ:
     TASKMAN_LOGGER_CLASS = os.environ['TASKMAN_LOGGER_CLASS']
     
-TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.Loader',
-)
-
-TEMPLATE_CONTEXT_PROCESSORS = (
-    "django.contrib.auth.context_processors.auth",
-    "django.core.context_processors.debug",
-    "django.core.context_processors.i18n",
-    "django.core.context_processors.media",
-    "django.core.context_processors.static",
-    "django.contrib.messages.context_processors.messages",
-    "django.core.context_processors.request",
-    )
-
-
 import dj_database_url
 
 DATABASES = {
@@ -162,10 +160,14 @@ if 'EMAIL_HOST_PASSWORD' in os.environ:
     EMAIL_HOST_PASSWORD = os.environ['EMAIL_HOST_PASSWORD']
 if 'EMAIL_USE_TLS' in os.environ:
     EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS') == "True"
+if 'EMAIL_USE_SSL' in os.environ:
+    EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL') == "True"
 
 ACTIONKIT_API_HOST = os.environ['ACTIONKIT_API_HOST']
 ACTIONKIT_API_USER = os.environ['ACTIONKIT_API_USER']
 ACTIONKIT_API_PASSWORD = os.environ['ACTIONKIT_API_PASSWORD']
+
+LOGIN_URL = '/admin/login/'
 
 import importlib
 for app_name in TASKMAN_PLUGIN_PACKAGES:

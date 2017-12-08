@@ -97,7 +97,7 @@ def batch_job(request, type):
         result = run_batch_job(task)
         return HttpResponse(result, content_type="text/plain")
     else:
-        run_batch_job.delay(task)
+        run_batch_job.delay(task.id)
 
         resp = redirect(".")
         resp['Location'] += '?' + request.META['QUERY_STRING']
