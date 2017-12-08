@@ -5,8 +5,10 @@ import decimal
 
 from main import task_registry
 
-# Create your models here.
-#select * from core_action where user_id=1195198;
+class LogEntry(models.Model):
+    task = models.ForeignKey('main.JobTask')
+    type = models.CharField(max_length=10)
+    data = models.TextField(null=True, blank=True)
 
 class LogEntry(models.Model):
     task = models.ForeignKey('main.JobTask')
