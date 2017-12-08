@@ -84,7 +84,7 @@ MIDDLEWARE_CLASSES = (
 
 ANONYMOUS_PATHS = ['/static/', '/admin/', '/accounts/']
 
-ROOT_URLCONF = 'urls'
+ROOT_URLCONF = 'akdata.urls'
 
 TEMPLATES = [
     {

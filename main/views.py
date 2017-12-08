@@ -94,7 +94,7 @@ def batch_job(request, type):
     task.save()
 
     if request.POST.get("submit") == "Run Now, Synchronously":
-        result = run_batch_job(task)
+        result = run_batch_job(task.id)
         return HttpResponse(result, content_type="text/plain")
     else:
         run_batch_job.delay(task.id)
