@@ -1,7 +1,7 @@
-from .models import LogEntry
-import json
 import datetime
+import json
 import logging
+from .models import LogEntry
 logger = logging.getLogger('aktasks')
 
 class TaskLogger(object):
@@ -42,7 +42,3 @@ class SqlTaskLogger(object):
 
     def success_log(self, task, *args):
         self._log(task, "success", *args)
-
-
-
-

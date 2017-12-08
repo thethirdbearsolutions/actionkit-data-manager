@@ -36,7 +36,7 @@ from zope.dottedname.resolve import resolve
 def get_task_log():
     task_log = resolve(
         getattr(settings, 'TASKMAN_LOGGER_CLASS', 
-                "main.task_logs.TaskLogger"))
+                "main.task_logs.SqlTaskLogger"))
     return task_log()
 
 class BatchForm(forms.Form):
