@@ -4,6 +4,7 @@ from basic_tasks.forms import (
     ActionfieldRenameJobForm,
     UserfieldJobForm,
     EventFieldCreateForm,
+    EventGeolocationForm,
     PublishReportResultsForm,
     ActionkitSpreadsheetForm,
     ActionDeleteJobForm,
@@ -12,6 +13,8 @@ from basic_tasks.forms import (
 
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
+register_task("EventGeolocationJob", 
+              "Geolocate events", EventGeolocationForm)
 register_task("UnsubscribeAndActJob", 
               "Subscribe/Unsubscribe: unsubscribe users from zero or more lists, "
               "and act on zero or one pages", UnsubscribeAndActJobForm),

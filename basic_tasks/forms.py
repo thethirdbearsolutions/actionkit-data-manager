@@ -14,6 +14,8 @@ from actionkit.rest import client as RestClient
 from actionkit.models import CoreAction, CoreActionField, QueryReport
 
 from main.forms import BatchForm, get_task_log
+from urllib2 import quote, urlopen
+from json import load
 
 dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
 
@@ -66,6 +68,75 @@ class ActionkitSpreadsheetForm(BatchForm):
 
         return n_rows, n_success, n_errors
 
+class EventGeolocationForm(BatchForm):
+    google_api_key = forms.CharField(label="Google API Key", required=True)
+    
+    def get_address(self, row):
+        components = []
+        fields = "address1 address2 city state region postal zip country".split()
+        for field in fields:
+            value = row.get(field)
+            if value and value.strip() and value.strip() not in components:
+                components.append(value)
+        return (u', '.join(components)).encode("utf-8")
+
+    def get_coords(self, addr):
+        GEOCODE_URL = 'https://maps.googleapis.com/maps/api/geocode/json?sensor=false&address='
+        api_key = self.cleaned_data['google_api_key']
+        url = "%s%s&key=%s" % (GEOCODE_URL, quote(addr), api_key)
+        res = load(urlopen(url))
+        results = res['results'][0]
+        return (results['geometry']['location']['lat'],
+                results['geometry']['location']['lng'],
+                results)
+
+    def run(self, task, rows):
+        ak = Client()
+        n_rows = n_success = n_error = 0
+
+        task_log = get_task_log()
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+            assert row.get('event_id') and int(row['event_id'])
+            addr = self.get_address(row)
+            if row.get('geocoded_latitude') and \
+               row.get('geocoded_longitude') and \
+               row.get('geocoded_address') == addr:
+                continue
+            try:
+                coords = self.get_coords(addr)
+            except Exception, e:
+                n_error += 1
+                task_log.error_log(task, {
+                    "event": row['event_id'],
+                    "status": "geocoding-failed",
+                    "address": addr,
+                    "error": str(e),
+                })
+                continue
+            try:
+                resp = ak.Event.set_custom_fields({
+                    'id': row['event_id'],
+                    'geocoded_address': addr,
+                    'geocoded_latitude': coords[0],
+                    'geocoded_longitude': coords[1],
+                })
+            except Exception, e:
+                n_error += 1
+                task_log.error_log(task, {
+                    "event": row['event_id'],
+                    "status": "set-custom-fields-failed",
+                    "address": addr,
+                    "coords": coords,
+                    "error": str(e),
+                })
+                continue
+            n_success += 1
+            task_log.success_log(task, resp)
+        return n_rows, n_success, n_error
+
+
 class EventFieldCreateForm(BatchForm):
     field_name = forms.CharField(label="Event Field Name", required=True)
     field_value = forms.CharField(label="Event Field Value", required=False)
@@ -102,12 +173,14 @@ class PublishReportResultsForm(BatchForm):
     report_id = forms.IntegerField(required=False)
     filename = forms.CharField(max_length=255)
     wrapper = forms.CharField(max_length=255)
+    bucket = forms.CharField(max_length=255)
+    bucket_url = forms.CharField(max_length=1000)
 
     def make_nonfailed_email_message(self, task):
         message = """Report results have been generated and published to the following URL:
 
-https://s3.amazonaws.com/thirdbear-backups/aclu/public/%s
-""" % self.cleaned_data['filename']
+%s%s
+""" % (self.cleaned_data['bucket_url'], self.cleaned_data['filename'])
         return message
 
     def run_sql(self, sql):
@@ -149,7 +222,7 @@ https://s3.amazonaws.com/thirdbear-backups/aclu/public/%s
 
         subprocess.call(["s3cmd", "put", "--acl-public",
                          "/tmp/%s" % self.cleaned_data['filename'],
-                         "s3://thirdbear-backups/aclu/public/"])
+                         "s3://%s/" % self.cleaned_data['bucket'])
         return 1, 1, 0 
 
 class UserfieldJobForm(BatchForm):
