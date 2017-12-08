@@ -220,9 +220,11 @@ class PublishReportResultsForm(BatchForm):
         fp.write(data)
         fp.close()
 
-        subprocess.call(["s3cmd", "put", "--acl-public",
-                         "/tmp/%s" % self.cleaned_data['filename'],
-                         "s3://%s/" % self.cleaned_data['bucket'])
+        subprocess.call([
+            "s3cmd", "put", "--acl-public",
+            "/tmp/%s" % self.cleaned_data['filename'],
+            "s3://%s/" % self.cleaned_data['bucket']
+        ])
         return 1, 1, 0 
 
 class UserfieldJobForm(BatchForm):
