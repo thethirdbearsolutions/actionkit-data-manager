@@ -3,7 +3,7 @@ SITE_DOMAIN = os.environ['SITE_DOMAIN']
 
 # Django settings for skel project.
 
-DEBUG = True
+DEBUG = 'DJANGO_DEBUG' in os.environ
 
 ADMINS = [
     ("Admin", i) for i in os.environ['ADMIN_EMAILS'].split(",")
