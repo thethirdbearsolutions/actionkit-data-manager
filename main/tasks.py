@@ -64,11 +64,14 @@ def run_batch_job(task_id):
         recurrence.is_running = False
         recurrence.save()
 
-    num = send_mail(subject, message, settings.DEFAULT_FROM_EMAIL,
-                    [job.created_by.email] + [i[1] for i in settings.ADMINS], 
-                    fail_silently=False)
+    if task.num_rows > job.only_email_if_rows_above:
+        num = send_mail(
+            subject, message, settings.DEFAULT_FROM_EMAIL,
+            [job.created_by.email] + [i[1] for i in settings.ADMINS], 
+            fail_silently=False)
 
-    print "Sent %s mails with subject %s; job %s completed; %s rows" % (num, subject, job.id, task.num_rows)
+        print "Sent %s mails with subject %s; job %s completed; %s rows" % (
+            num, subject, job.id, task.num_rows)
     return message
 
 @app.task()

@@ -15,6 +15,7 @@ class BatchJob(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
     sql = models.TextField()
     form_data = models.TextField(default="{}")
+    only_email_if_rows_above = models.IntegerField(default=0)
 
     title = models.CharField(max_length=255, null=True, blank=True)
 
