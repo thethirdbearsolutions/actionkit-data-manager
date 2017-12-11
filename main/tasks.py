@@ -64,7 +64,7 @@ def run_batch_job(task_id):
         recurrence.is_running = False
         recurrence.save()
 
-    if task.num_rows > job.only_email_if_rows_above:
+    if task.error_count > 0 or task.num_rows > job.only_email_if_rows_above:
         num = send_mail(
             subject, message, settings.DEFAULT_FROM_EMAIL,
             [job.created_by.email] + [i[1] for i in settings.ADMINS], 
