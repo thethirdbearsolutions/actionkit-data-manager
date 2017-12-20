@@ -1,5 +1,6 @@
 from django.db import models
 from django.db import connections
+from django.utils import timezone
 from djcelery.models import TaskState
 import decimal
 
@@ -67,6 +68,9 @@ class RecurringTask(models.Model):
     is_running = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
+    def current_time(self):
+        return timezone.now()
+
     def __unicode__(self):
         return u"Every %s %s: %s" % (self.period, self.period_unit, unicode(self.parent_job))
 
@@ -115,7 +119,7 @@ class JobTask(models.Model):
 
 from djangohelpers.lib import register_admin
 register_admin(BatchJob)
-register_admin(RecurringTask)
+register_admin(RecurringTask, also=['current_time'])
 register_admin(JobTask)
 
 class TaskBatch(models.Model):
