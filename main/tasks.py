@@ -51,7 +51,7 @@ def run_batch_job(task_id):
         except Exception:
             pass
         else:
-            messages += "\n\n%s" % data
+            message += "\n\n%s" % data
 
     message += "\n\nCheck it out here: http://%s/admin/main/jobtask/%s/" % (settings.SITE_DOMAIN, task.id)
     message += "\nThe job configuration is here: http://%s/admin/main/batchjob/%s/" % (settings.SITE_DOMAIN, job.id)
