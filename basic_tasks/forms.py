@@ -420,16 +420,23 @@ All columns apart from user_id and new_data_* will be ignored by the job code
             assert row.get("user_id") and int(row['user_id'])
 
             new_values = {"id": row['user_id']}
+            new_values['fields'] = {}
             for key in row:
                 if not key.startswith("new_data_"):
                     continue
-                new_values[key.replace("new_data_", "", 1)] = row[key]
+                if key.startswith("new_data_user_"):
+                    new_values['fields'][key.replace("new_data_user_", "", 1)] = row[key]
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+            if not new_values['fields']: new_values.pop("fields")
 
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:
-                rest.user.put(id=row['user_id'], **new_values)
-                resp = {}
+                resp = rest.user.put(id=row['user_id'], **new_values)
+                resp = {
+                    'put_response': resp
+                }
                 resp['log_id'] = row['user_id']
 
                 if self.cleaned_data.get("actionkit_page"):
@@ -456,7 +463,15 @@ All columns apart from user_id and new_data_* will be ignored by the job code
 
 class UnsubscribeAndActJobForm(BatchForm):
     help_text = """
-<p>The SQL must return a column named `user_id`.</p>
+<p>The SQL must return a column named `user_id` OR a column named `email`.</p>
+
+<p>Unsubscribes will only occur for rows with a `user_id`. The `email` column 
+can only be used for the "act" portion of this job, either to create actions 
+for not-yet-existing users, or to create actions without first looking up
+their user IDs.</p>
+
+<p>Any columns named like `act_*` will be treated as actionfields for the 
+"act" portion of the job.</p>
 
 <p>If the SQL returns a column named `caused_by_action`, the value of this column
 will be stored in a custom actionfield `caused_by_action` on the action page that
@@ -483,12 +498,22 @@ each user is marked as acting on.</p>
         for row in rows:
             task_log.sql_log(task, row)
             n_rows += 1
-            assert row.get('user_id') and int(row['user_id'])
-            user_id = row['user_id']
+            assert (
+                (row.get('user_id') and int(row['user_id']))
+                or
+                (row.get('email'))
+            )
+
+            try:
+                user_id = row['user_id']
+            except KeyError:
+                user_id = None
 
             caused_by_action = row.get('caused_by_action') or None
             unsubs = []
             for list_id in lists:
+                if not user_id:
+                    continue
                 try:
                     ak.User.unsubscribe({'id': user_id, 'list_id': list_id})
                 except:
@@ -497,19 +522,25 @@ each user is marked as acting on.</p>
                     unsubs.append(list_id)
             if page is None:
                 continue
-            action = {'id': user_id, 'page': page}
+            if user_id:
+                action = {'id': user_id, 'page': page}
+            else:
+                action = {'email': row['email'], 'page': page}
             if unsubs:
                 action['action_unsubscribed_from_lists'] = unsubs
             if caused_by_action:
                 action['action_caused_by_action'] = caused_by_action
+            for key in row:
+                if key.startswith("act_"):
+                    action[key[4:]] = row[key]
             try:
                 resp = ak.act(action)
-                resp['log_id'] = row['user_id']
+                resp['log_id'] = row['user_id'] if user_id else row['email']
                 task_log.success_log(task, resp)
             except Exception, e:
                 n_error += 1
                 resp = {}
-                resp['log_id'] = row['user_id']
+                resp['log_id'] = row['user_id'] if user_id else row['email']
                 resp['error'] = traceback.format_exc()
                 task_log.error_log(task, resp)
             else:
