@@ -20,6 +20,8 @@ class BatchJob(models.Model):
 
     title = models.CharField(max_length=255, null=True, blank=True)
 
+    database = models.CharField(default='ak', max_length=255)
+    
     def __unicode__(self):
         if self.title:
             return "%s: %s" % (self.id, self.title)
@@ -40,7 +42,7 @@ class BatchJob(models.Model):
         return self.form_factory.from_job(self, recurrence=recurrence)
 
     def run_sql(self, ctx={}):
-        cursor = connections['ak'].cursor()
+        cursor = connections[self.database].cursor()
         sql = self.sql
         if ctx and '{form[' in sql:
             sql = sql.format(form=ctx)

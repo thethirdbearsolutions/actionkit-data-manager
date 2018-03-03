@@ -44,11 +44,15 @@ class BatchForm(forms.Form):
     sql = forms.CharField(widget=forms.Textarea, label="SQL", required=True)
     title = forms.CharField(label="Job Title", required=False)
 
+    database = forms.CharField(label="Database", required=False)
+    
     @classmethod
     def from_job(cls, job, recurrence=None):
         data = json.loads(job.form_data)
         data['sql'] = job.sql
-
+        if job.database:
+            data['database'] = job.database
+        
         if recurrence is not None:
             overrides = "{}"
             last_runs = recurrence.completed_runs()
@@ -73,6 +77,9 @@ class BatchForm(forms.Form):
 
     def fill_job(self, job):
         job.sql = self.cleaned_data['sql']
+        if self.cleaned_data.get("database"):
+            job.database = self.cleaned_data['database'].strip()
+
         if self.cleaned_data.get("title", "").strip():
             job.title = self.cleaned_data['title'].strip()
 
