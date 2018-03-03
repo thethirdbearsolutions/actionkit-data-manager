@@ -13,6 +13,7 @@ from django.core.mail import send_mail
 from dateutil.relativedelta import relativedelta
 import json
 from django.conf import settings
+from django.utils import timezone
 
 from akdata.celery import app
 
@@ -79,7 +80,7 @@ def run_recurring_tasks():
 
     print "Looking for tasks..."
 
-    now = datetime.datetime.now()
+    now = timezone.now()
 
     tasks = RecurringTask.objects.filter(
         is_active=True, is_running=False).select_related("parent_job")
