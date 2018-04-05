@@ -473,7 +473,7 @@ All columns apart from action_id and new_data_* will be ignored by the job code
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:
-                resp = rest.user.put(id=row['action_id'], **new_values)
+                resp = rest.action.put(id=row['action_id'], **new_values)
                 resp = {
                     'put_response': resp
                 }
