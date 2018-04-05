@@ -430,11 +430,11 @@ and a column named `json_primary_key`.
 
 class ActionModificationForm(BatchForm):
     help_text = """
-The SQL must return a column named `action_id`.
+The SQL must return columns named `action_id` and `action_type`
 
 All columns with prefix `new_data_` will be treated as new values
 for the core_action attributes.  For example, `select id as action_id, 
-concat("my-source-", id)
+"signup" as action_type, concat("my-source-", id)
 as new_data_source from core_action
 where id in (100,101);` would cause four action records to have their
 source attributes set to "my-source-100" and "my-source-101" respectively.
@@ -458,7 +458,8 @@ All columns apart from action_id and new_data_* will be ignored by the job code
             n_rows += 1
 
             assert row.get("action_id") and int(row['action_id'])
-
+            assert row.get("action_type")
+            
             new_values = {"id": row['action_id']}
             new_values['fields'] = {}
             for key in row:
@@ -473,7 +474,7 @@ All columns apart from action_id and new_data_* will be ignored by the job code
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:
-                resp = rest.action.put(id=row['action_id'], **new_values)
+                resp = getattr(rest, "%saction" % row['action_type'].lower()).put(id=row['action_id'], **new_values)
                 resp = {
                     'put_response': resp
                 }
