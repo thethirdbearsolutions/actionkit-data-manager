@@ -427,7 +427,70 @@ and a column named `json_primary_key`.
             else:
                 n_success += 1
         return n_rows, n_success, n_error
-                
+
+class ActionModificationForm(BatchForm):
+    help_text = """
+The SQL must return a column named `action_id`.
+
+All columns with prefix `new_data_` will be treated as new values
+for the core_action attributes.  For example, `select id as action_id, 
+concat("my-source-", id)
+as new_data_source from core_action
+where id in (100,101);` would cause four action records to have their
+source attributes set to "my-source-100" and "my-source-101" respectively.
+
+Columns prefixed new_data_action_* can also be used to set or update actionfield
+values.
+
+All columns apart from action_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("action_id") and int(row['action_id'])
+
+            new_values = {"id": row['action_id']}
+            new_values['fields'] = {}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                if key.startswith("new_data_action_"):
+                    new_values['fields'][key.replace("new_data_action_", "", 1)] = row[key]
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+            if not new_values['fields']: new_values.pop("fields")
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = rest.user.put(id=row['action_id'], **new_values)
+                resp = {
+                    'put_response': resp
+                }
+                resp['log_id'] = row['action_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['action_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+
 class UserModificationForm(BatchForm):
 
     actionkit_page = forms.CharField(label="Optional tracking page name",
