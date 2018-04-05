@@ -29,7 +29,7 @@ register_task("PublishReportResultsJob",
 register_task("ActionkitSpreadsheetJob", 
               "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
-register_task("UserModificationJob", "Modify Actions", ActionModificationForm)
+register_task("ActionModificationJob", "Modify Actions", ActionModificationForm)
 register_task("UserModificationJob", "Modify Users", UserModificationForm)
 register_task("EventFieldCreateJob",
               "Apply event field to batch", EventFieldCreateForm)
