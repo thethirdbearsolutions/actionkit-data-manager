@@ -9,10 +9,13 @@ from basic_tasks.forms import (
     ActionkitSpreadsheetForm,
     ActionDeleteJobForm,
     UserModificationForm,
+    CustomFieldJSONForm,
 )
 
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
+register_task("CustomFieldJSONJob", 
+              "Sync rows to JSON blob in a custom field", CustomFieldJSONForm)
 register_task("EventGeolocationJob", 
               "Geolocate events", EventGeolocationForm)
 register_task("UnsubscribeAndActJob", 
