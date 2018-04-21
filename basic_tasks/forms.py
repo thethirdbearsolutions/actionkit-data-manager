@@ -428,6 +428,71 @@ and a column named `json_primary_key`.
                 n_success += 1
         return n_rows, n_success, n_error
 
+class ActionCloneForm(BatchForm):
+    help_text = """
+The SQL must return columns named `action_id` and `new_page_name`
+
+Each action will be fetched and its data (along with actionfields) will be
+cloned to a new action against its corresponding `new_page_name`.
+
+The new action's created_at will also be backdated to match the original action.
+
+All columns apart from action_id, new_page_name, and delete_original_action
+will be ignored by the job code (but can be used to review records for accuracy, log 
+old values, etc)
+"""
+
+    delete_original_action = forms.ChoiceField(choices=[("no", "no"), ("yes", "yes")])
+    skip_confirmation = forms.ChoiceField(choices=[("yes", "yes"), ("no", "no")])
+
+    def run_one(self, task, row, task_log):
+        rest = RestClient()
+        rest.safety_net = False
+
+        action_id = row['action_id']
+        action = rest.action.get(id=action_id)
+        for field_name in action.get("fields", {}):
+            field_value = action['fields'][field_name]
+            action['action_%s' % field_name] = field_value
+        if self.cleaned_data['skip_confirmation'] != "no":
+            action['skip_confirmation'] = 1
+        action['page'] = row['new_page_name']
+        action['return_full_response'] = True
+
+        task_log.activity_log(task, action)
+        resp = rest.action.create(**action)
+        new_action_id = resp['id']
+        action.pop("id")
+        action.pop("page")
+        type = resp['resource_uri'].split("/rest/v1/")[1].split("action/")[0]
+        
+        resp2 = getattr(rest, "%saction" % type).patch(id=new_action_id, **action)
+
+        if self.cleaned_data['delete_original_action'] == "yes":
+            resp3 = rest.action.delete(id=action_id)
+            
+        return resp
+    
+    def run(self, task, rows):
+        task_log = get_task_log()
+        
+        n_rows = n_success = n_error = 0
+        
+        for row in rows:
+            try:
+                task_log.sql_log(task, row)
+                resp = self.run_one(task, row, task_log)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['action_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+                task_log.success_log(task, resp)
+        return n_rows, n_success, n_error
+    
 class ActionModificationForm(BatchForm):
     help_text = """
 The SQL must return columns named `action_id` and `action_type`

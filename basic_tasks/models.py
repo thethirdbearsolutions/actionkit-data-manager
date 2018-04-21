@@ -4,6 +4,7 @@ from basic_tasks.forms import (
     ActionfieldRenameJobForm,
     UserfieldJobForm,
     EventFieldCreateForm,
+    ActionCloneForm,
     EventGeolocationForm,
     PublishReportResultsForm,
     ActionkitSpreadsheetForm,
@@ -26,6 +27,8 @@ register_task("ActionfieldRenameJob",
               "Rename Actionfields", ActionfieldRenameJobForm)
 register_task("PublishReportResultsJob",
               "Run and Publish Reports", PublishReportResultsForm)
+register_task("ActionCloneJob", "Clone and potentially delete actions",
+              ActionCloneForm)
 register_task("ActionkitSpreadsheetJob", 
               "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
