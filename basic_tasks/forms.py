@@ -1,7 +1,9 @@
 import datetime
 import decimal
 from django import forms
+from django.conf import settings
 from django.db import connections
+from django.template import Template, Context
 import gdata.spreadsheet.service
 import gzip
 import json
@@ -175,7 +177,8 @@ class PublishReportResultsForm(BatchForm):
     wrapper = forms.CharField(max_length=255)
     bucket = forms.CharField(max_length=255)
     bucket_url = forms.CharField(max_length=1000)
-
+    variable_mapping = forms.CharField(max_length=1000, required=False)
+    
     def make_nonfailed_email_message(self, task):
         message = """Report results have been generated and published to the following URL:
 
@@ -184,6 +187,16 @@ class PublishReportResultsForm(BatchForm):
         return message
 
     def run_sql(self, sql):
+
+        if '{{' in sql and '}}' in sql and self.cleaned_data.get("variable_mapping"):
+            variable_mapping = json.loads(self.cleaned_data['variable_mapping'])
+            sql = "{% autoescape off %}" + sql + "{% endautoescape %}"
+            for key in variable_mapping:
+                if isinstance(variable_mapping[key], basestring):
+                    variable_mapping[key] = '"%s"' % variable_mapping[key]
+            context = Context(variable_mapping)
+            sql = Template(sql).render(context)
+        
         cursor = connections['ak'].cursor()
         cursor.execute(sql)
 
