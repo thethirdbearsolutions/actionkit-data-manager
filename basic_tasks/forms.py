@@ -570,6 +570,174 @@ All columns apart from action_id and new_data_* will be ignored by the job code
         return n_rows, n_success, n_error
 
 
+class EventSignupModificationForm(BatchForm):
+    help_text = """
+The SQL must return a column named `signup_id`
+
+All columns with prefix `new_data_` will be treated as new values
+for the events_eventsignup attributes.  For example, `select id as signup_id, 
+"cancelled" as new_data_status
+where id in (100,101);` would cause two event signup records 
+to become cancelled.
+
+All columns apart from signup_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("signup_id") and int(row['signup_id'])
+            
+            new_values = {"id": row['signup_id']}
+            new_values['fields'] = {}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                if key.startswith("new_data_action_"):
+                    new_values['fields'][key.replace("new_data_action_", "", 1)] = row[key]
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+            if not new_values['fields']: new_values.pop("fields")
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = rest.eventsignup.patch(id=row['signup_id'], **new_values)
+                resp = {
+                    'patch_response': resp
+                }
+                resp['log_id'] = row['signup_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['signup_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+class EventModificationForm(BatchForm):
+    help_text = """
+The SQL must return a column named `event_id``
+
+All columns with prefix `new_data_` will be treated as new values
+for the events_event attributes.  For example, `select id as event_id, 
+true as new_data_host_is_confirmed, "Turn left" as new_data_directions from events_event
+where id in (100,101);` would cause two event records to become confirmed
+and have their directions updated.
+
+TODO, UNTESTED: Columns prefixed new_data_action_* can also be used to set or update 
+event custom field values.
+
+All columns apart from event_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("event_id") and int(row['event_id'])
+            
+            new_values = {"id": row['event_id']}
+            new_values['fields'] = {}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                if key.startswith("new_data_action_"):
+                    new_values['fields'][key.replace("new_data_action_", "", 1)] = row[key]
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+            if not new_values['fields']: new_values.pop("fields")
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = rest.event.put(id=row['event_id'], **new_values)
+                resp = {
+                    'put_response': resp
+                }
+                resp['log_id'] = row['event_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['event_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+
+import HTMLParser
+import urllib2
+
+class EventHtmlEntitiesForm(BatchForm):
+
+    def cleanupString(self, string):
+        string = urllib2.unquote(string).decode('utf8')
+        return HTMLParser.HTMLParser().unescape(string).encode('utf8')
+
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("event_id") and int(row['event_id'])
+            assert row.get("public_description")
+            
+            new_values = {"id": row['event_id']}
+            new_values['public_description'] = self.cleanupString(row['public_description'])
+            
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = rest.event.put(id=row['event_id'], **new_values)
+                resp = {
+                    'put_response': resp
+                }
+                resp['log_id'] = row['event_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['event_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+    
+
 class UserModificationForm(BatchForm):
 
     actionkit_page = forms.CharField(label="Optional tracking page name",

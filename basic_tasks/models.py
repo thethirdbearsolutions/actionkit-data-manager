@@ -11,6 +11,9 @@ from basic_tasks.forms import (
     ActionDeleteJobForm,
     ActionModificationForm,
     UserModificationForm,
+    EventModificationForm,
+    EventHtmlEntitiesForm,
+    EventSignupModificationForm,
     CustomFieldJSONForm,
 )
 
@@ -34,5 +37,9 @@ register_task("ActionkitSpreadsheetJob",
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
 register_task("ActionModificationJob", "Modify Actions", ActionModificationForm)
 register_task("UserModificationJob", "Modify Users", UserModificationForm)
+register_task("EventModificationJob", "Modify Events", EventModificationForm)
+register_task("EventHtmlEntitiesJob", "Clean up HTML entities in event.public_description", EventHtmlEntitiesForm)
+register_task("EventSignupModificationJob", "Modify Event signups",
+              EventSignupModificationForm)
 register_task("EventFieldCreateJob",
               "Apply event field to batch", EventFieldCreateForm)
