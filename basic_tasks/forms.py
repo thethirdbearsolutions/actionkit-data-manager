@@ -647,7 +647,8 @@ All columns apart from event_id and new_data_* will be ignored by the job code
     def run(self, task, rows):
         rest = RestClient()
         rest.safety_net = False
-
+        xmlrpc = Client()
+        
         task_log = get_task_log()
 
         n_rows = n_success = n_error = 0
@@ -667,15 +668,22 @@ All columns apart from event_id and new_data_* will be ignored by the job code
                     new_values['fields'][key.replace("new_data_action_", "", 1)] = row[key]
                 else:
                     new_values[key.replace("new_data_", "", 1)] = row[key]
-            if not new_values['fields']: new_values.pop("fields")
+            fields = new_values.pop("fields")
 
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:
-                resp = rest.event.put(id=row['event_id'], **new_values)
-                resp = {
-                    'put_response': resp
-                }
+                if new_values:
+                    resp = rest.event.put(id=row['event_id'], **new_values)
+                    resp = {
+                        'put_response': resp
+                    }
+                else:
+                    resp = {"put_response": None}
+                if fields:
+                    fields['id'] = row['event_id']
+                    resp2 = xmlrpc.Event.set_custom_fields(fields)
+                    resp['custom_fields_response'] = resp2
                 resp['log_id'] = row['event_id']
                 task_log.success_log(task, resp)
             except Exception, e:
