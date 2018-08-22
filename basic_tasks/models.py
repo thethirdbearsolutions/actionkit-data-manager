@@ -1,6 +1,7 @@
 from main.task_registry import register_task
 from basic_tasks.forms import (
     UnsubscribeAndActJobForm,
+    UserMergeForm,
     ActionfieldRenameJobForm,
     UserfieldJobForm,
     EventFieldCreateForm,
@@ -17,6 +18,7 @@ from basic_tasks.forms import (
     CustomFieldJSONForm,
 )
 
+register_task("UserMergeJob", "Merge users", UserMergeForm)
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
 register_task("CustomFieldJSONJob", 

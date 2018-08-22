@@ -240,6 +240,45 @@ class PublishReportResultsForm(BatchForm):
         ])
         return 1, 1, 0 
 
+class UserMergeForm(BatchForm):
+    help_text = """
+Required columns: merge_from_user_id, merge_to_user_id, whose_address ("from" or "to")
+"""
+
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        n_rows = n_success = n_error = 0
+        task_log = get_task_log()
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            try:
+                for field in 'merge_from_user_id merge_to_user_id'.split():
+                    assert row.get(field) and int(row[field])
+                assert row.get("whose_address") and row['whose_address'] in ("from", "to")
+            
+                resp = rest.usermerge.create(
+                    primary_user='/rest/v1/user/%s/' % row['merge_to_user_id'],
+                    address_user='/rest/v1/user/%s/' % (row['merge_to_user_id'] if row['whose_address'] == 'to' else row['merge_from_user_id']),
+                    users=[
+                        '/rest/v1/user/%s/' % row['merge_from_user_id'],
+                    ],
+                )
+            except Exception, e:
+                n_error += 1
+                resp = {"log_id": row['merge_from_user_id'],
+                        'error': traceback.format_exc()}
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+                task_log.success_log(task, resp)
+        return n_rows, n_success, n_error
+
+    
 class UserfieldJobForm(BatchForm):
     help_text = """
 The SQL must return a column named `user_id`. Userfield Value is optional -- include it if you want a hardcoded userfield value filled in for all results. Alternatively, you can cause the SQL to return a column named `userfield_value`, and this will be used instead.
