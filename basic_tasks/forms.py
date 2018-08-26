@@ -569,6 +569,10 @@ and a column named `json_primary_key`.
 
         n_rows = n_success = n_error = 0
 
+        endpoint = getattr(rest, self.cleaned_data['field_type'] + "field")
+        field = endpoint.get(id=49)
+        current = json.loads(field['value'])
+        
         for row in rows:
             task_log.sql_log(task, row)
             n_rows += 1
