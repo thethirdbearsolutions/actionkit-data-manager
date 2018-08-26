@@ -12,5 +12,9 @@
       {% endfor %}
     </div>
   </div>
+
+  {% if page %}
+  {{ page.content|safe }}
+  {% endif %}
 </div>
 {% endblock %}
