@@ -385,6 +385,50 @@ class ActionDeleteJobForm(BatchForm):
 
         return n_rows, n_success, n_error
 
+class CustomFieldJSONForm(BatchForm):
+    field_type = forms.CharField(label="Object type that this custom field is attached to (templateset, page, action, user, mailing)")
+    help_text = """
+The SQL must return a column named `ak_custom_field_id`
+and a column named `json_primary_key`.
+"""
+
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        endpoint = getattr(rest, self.cleaned_data['field_type'] + "field")
+        field = endpoint.get(id=49)
+        current = json.loads(field['value'])
+        
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            try:
+                assert row.get("ak_custom_field_id") and int(row['ak_custom_field_id'])
+                assert row.get("json_primary_key")
+
+                #task_log.activity_log(task, current)
+                current[str(row['json_primary_key'])] = row
+                new = json.dumps(current)
+                field['value'] = new
+                #task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                task_log.error_log(
+                    task, {
+                        'row': row,
+                        'error': traceback.format_exc(),
+                    })
+            else:
+                n_success += 1
+        resp = endpoint.put(**field)
+        return n_rows, n_success, n_error
+                
 class UserModificationForm(BatchForm):
 
     actionkit_page = forms.CharField(label="Optional tracking page name",
