@@ -104,10 +104,17 @@ def batch_job(request, type):
     return resp
 
 from main import task_registry
+from django.contrib.flatpages.models import FlatPage
+
 @allow_http("GET", "POST")
 @rendered_with("main/home.html")
 def home(request):
     links = []
     for job_type in task_registry.tasks.items():
         links.append(("/batch-job/%s/" % job_type[0], job_type[1].description))
+
+    try:
+        page = FlatPage.objects.get(url="/akdata-home/")
+    except FlatPage.DoesNotExist:
+        page = None
     return locals()
