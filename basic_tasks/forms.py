@@ -19,6 +19,9 @@ from main.forms import BatchForm, get_task_log
 from urllib2 import quote, urlopen
 from json import load
 
+import HTMLParser
+import urllib2
+
 dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
 
 class ActionkitSpreadsheetForm(BatchForm):
@@ -737,9 +740,6 @@ All columns apart from event_id and new_data_* will be ignored by the job code
         return n_rows, n_success, n_error
 
 
-import HTMLParser
-import urllib2
-
 class EventHtmlEntitiesForm(BatchForm):
 
     def cleanupString(self, string):
@@ -859,6 +859,7 @@ All columns apart from user_id and new_data_* will be ignored by the job code
                 n_success += 1
 
         return n_rows, n_success, n_error
+
 
 
 class UnsubscribeAndActJobForm(BatchForm):

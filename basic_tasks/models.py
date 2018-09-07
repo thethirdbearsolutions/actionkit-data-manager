@@ -17,7 +17,18 @@ from basic_tasks.forms import (
     EventSignupModificationForm,
     CustomFieldJSONForm,
 )
+from basic_tasks.mailchimp import (
+    MailchimpAddSubscriberForm,
+    MailchimpAddSubscriberTagForm,
+    MailchimpRemoveSubscriberTagForm,    
+)
 
+register_task("MailchimpAddSubscriberJob", "Push subscriber info to Mailchimp",
+              MailchimpAddSubscriberForm)
+register_task("MailchimpAddSubscriberTagJob", "Add Mailchimp tag to subscriber",
+              MailchimpAddSubscriberTagForm)
+register_task("MailchimpRemoveSubscriberTagJob", "Remove Mailchimp tag from subscriber",
+              MailchimpRemoveSubscriberTagForm)
 register_task("UserMergeJob", "Merge users", UserMergeForm)
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
