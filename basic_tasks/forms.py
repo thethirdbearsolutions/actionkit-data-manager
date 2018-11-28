@@ -7,6 +7,7 @@ from django.template import Template, Context
 import gdata.spreadsheet.service
 import gzip
 import json
+import os
 import subprocess
 import requests
 import traceback
