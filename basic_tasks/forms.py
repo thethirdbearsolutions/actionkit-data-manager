@@ -63,7 +63,7 @@ class CloudinaryImageForm(BatchForm):
                     for block in response.iter_content(1024):
                         handle.write(block)
 
-                if os.path.getsize("/tmp/%s.png" % row['filename']) < 30000:
+                if os.path.getsize("/tmp/%s.png" % row['filename']) < 10000:
                     raise Exception(
                         "File %s is suspiciously short: %s bytes" % (
                             row['filename'], os.path.getsize("/tmp/%s.png" % row['filename'])
