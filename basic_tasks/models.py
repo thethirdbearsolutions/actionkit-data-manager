@@ -16,6 +16,7 @@ from basic_tasks.forms import (
     EventHtmlEntitiesForm,
     EventSignupModificationForm,
     CustomFieldJSONForm,
+    CloudinaryImageForm,
 )
 from basic_tasks.mailchimp import (
     MailchimpAddSubscriberForm,
@@ -23,6 +24,7 @@ from basic_tasks.mailchimp import (
     MailchimpRemoveSubscriberTagForm,    
 )
 
+register_task("CloudinaryImageJob", "Cloudinary", CloudinaryImageForm)
 register_task("MailchimpAddSubscriberJob", "Push subscriber info to Mailchimp",
               MailchimpAddSubscriberForm)
 register_task("MailchimpAddSubscriberTagJob", "Add Mailchimp tag to subscriber",
