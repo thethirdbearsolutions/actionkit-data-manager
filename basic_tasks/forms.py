@@ -24,6 +24,68 @@ import urllib2
 
 dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
 
+from django.contrib.humanize.templatetags.humanize import intcomma
+import urllib
+from django.template import defaultfilters 
+
+class CloudinaryImageForm(BatchForm):
+    
+    template = forms.CharField(label="Cloudinary URL template", required=True)
+    s3_location = forms.CharField(label="S3 location (bucketname/path/to/folder)", required=True)
+    
+    def run(self, task, rows):
+        task_log = get_task_log()
+        n_rows = n_success = n_errors = 0
+        
+        for row in rows:
+
+            task_log.sql_log(task, row)
+            n_rows += 1
+            
+            row['donations'] = intcomma(int(row['donations']))
+            row['donors'] = intcomma(int(row['donors']))
+            row['goal'] = intcomma(int(row['goal']))
+        
+            row['timestamp'] = "As of %s at %s" % (
+                defaultfilters.date(row['timestamp'], "M jS"),
+                defaultfilters.date(row['timestamp'], "P").replace(".", "").replace(" ", ""),
+            )
+
+            for key in row:
+                row[key] = urllib.quote(str(row[key]).replace(',', "%2C").replace('/', "%2F"))
+
+            url = self.cleaned_data['template'].format(**row)
+        
+            try:
+                response = requests.get(url, stream=True)
+                with open('/tmp/%s.png' % row['filename'], 'wb') as handle:
+                    for block in response.iter_content(1024):
+                        handle.write(block)
+
+                if os.path.getsize("/tmp/%s.png" % row['filename']) < 30000:
+                    raise Exception(
+                        "File %s is suspiciously short: %s bytes" % (
+                            row['filename'], os.path.getsize("/tmp/%s.png" % row['filename'])
+                        )
+                    )
+                
+                subprocess.check_call([
+                    "s3cmd", "put", "--acl-public",
+                    "--cf-invalidate",
+                    "--add-header=Cache-Control:no-cache",
+                    "-c", "/home/taskman/.s3cfg",
+                    "/tmp/%s.png" % row['filename'],
+                    "s3://%s/%s.png" % (self.cleaned_data['s3_location'], row['filename'])
+                ])
+                
+            except Exception, e:
+                n_errors += 1
+                task_log.error_log(task, {"row": row, "error": str(e)})
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_errors
+
 class ActionkitSpreadsheetForm(BatchForm):
 
     exclude = forms.CharField(label="Comma separated list of IDs to exclude", required=True)
