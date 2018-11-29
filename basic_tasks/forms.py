@@ -50,7 +50,7 @@ class CloudinaryImageForm(BatchForm):
             row['timestamp'] = "As of %s at %s" % (
                 defaultfilters.date(row['timestamp'], "M jS"),
                 defaultfilters.date(row['timestamp'], "P").replace(".", "").replace(" ", ""),
-            )
+            ).upper()
 
             for key in row:
                 row[key] = urllib.quote(str(row[key]).replace(',', "%2C").replace('/', "%2F"))
