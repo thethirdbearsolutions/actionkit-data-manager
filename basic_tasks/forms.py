@@ -47,10 +47,10 @@ class CloudinaryImageForm(BatchForm):
             row['donors'] = intcomma(int(row['donors']))
             row['goal'] = intcomma(int(row['goal']))
         
-            row['timestamp'] = "As of %s at %s" % (
+            row['timestamp'] = ("As of %s at %s" % (
                 defaultfilters.date(row['timestamp'], "M jS"),
                 defaultfilters.date(row['timestamp'], "P").replace(".", "").replace(" ", ""),
-            ).upper()
+            )).upper()
 
             for key in row:
                 row[key] = urllib.quote(str(row[key]).replace(',', "%2C").replace('/', "%2F"))
