@@ -183,6 +183,11 @@ class EventGeolocationForm(BatchForm):
                     "error": str(e),
                 })
                 continue
+            else:
+                task_log.activity_log(task, {
+                    "id": row['event_id'],
+                    "geo-result": coords[2],
+                })
             try:
                 resp = ak.Event.set_custom_fields({
                     'id': row['event_id'],
@@ -304,6 +309,9 @@ class PublishReportResultsForm(BatchForm):
                 _rows[row['key']] = result
             rows = _rows
 
+        if os.path.exists("/tmp/%s" % self.cleaned_data['filename']):
+            shutil.move("/tmp/%s" % self.cleaned_data['filename'], "/tmp/%s.old" % self.cleaned_data['filename'])
+        
         fp = open("/tmp/%s" % self.cleaned_data['filename'], 'w')
         data = json.dumps(rows, default=dthandler, indent=2)
         if self.cleaned_data.get("wrapper") and '%' in self.cleaned_data['wrapper']:
@@ -311,12 +319,42 @@ class PublishReportResultsForm(BatchForm):
         fp.write(data)
         fp.close()
 
-        subprocess.check_call([
-            "s3cmd", "put", "--acl-public",
-            "/tmp/%s" % self.cleaned_data['filename'],
-            "s3://%s/" % self.cleaned_data['bucket']
-        ])
-        return 1, 1, 0 
+        if not os.path.exists("/tmp/%s.old" % self.cleaned_data['filename']):
+            subprocess.check_call([
+                "s3cmd", "put", "--acl-public",
+                "/tmp/%s" % self.cleaned_data['filename'],
+                "s3://%s/" % self.cleaned_data['bucket']
+            ])
+            return 1, 1, 0 
+
+        try:
+            subprocess.check_output([
+                "diff",
+                "/tmp/%s.old" % self.cleaned_data['filename'],
+                "/tmp/%s" % self.cleaned_data['filename'],
+            ])
+        except subprocess.CalledProcessError, e:
+            diff = e.output.splitlines()
+            task.form_data = json.dumps({"diff": e.output})
+            task.save()
+        else:
+            return 0, 0, 0
+
+        try:
+            cmd = [
+                "s3cmd", "put", "--acl-public",
+                "/tmp/%s" % self.cleaned_data['filename'],
+                "s3://%s/" % self.cleaned_data['bucket']
+            ]
+            subprocess.check_call(cmd)
+        except subprocess.CalledProcessError, e:
+            task_log.error_log(task, {
+                "stage": "s3cmd_put",
+                "errorcode": e.returncode,
+                "error": str(e),
+            })
+            return 1, 0, 1
+        return 1, len(diff), 0
 
 class UserMergeForm(BatchForm):
     help_text = """
