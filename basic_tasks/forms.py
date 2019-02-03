@@ -213,6 +213,13 @@ class EventFieldCreateForm(BatchForm):
         field_value = self.cleaned_data.get("field_value").strip() or None
         field_name = self.cleaned_data['field_name']
 
+        is_array = False
+        separator = None
+        if '[' in field_name and ']' in field_name:
+            is_array = True
+            separator = field_name.split("[")[1].split("]")[0]
+            field_name = field_name.split("[")[0]
+
         ak = Client()
         n_rows = n_success = n_error = 0
 
@@ -225,7 +232,12 @@ class EventFieldCreateForm(BatchForm):
             try:
                 fields = ak.Event.get_custom_fields({"id": row['event_id']})
                 fields['id'] = row['event_id']
-                fields[field_name] = field_value or row['field_value']
+                
+                if not is_array:
+                    fields[field_name] = field_value or row['field_value']
+                else:
+                    fields[field_name] = (field_value or row['field_value']).split(separator)
+                
                 resp = ak.Event.set_custom_fields(fields)
             except Exception, e:
                 n_error += 1
