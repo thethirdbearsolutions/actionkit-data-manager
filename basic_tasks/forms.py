@@ -8,6 +8,7 @@ import gdata.spreadsheet.service
 import gzip
 import json
 import os
+import shutil
 import subprocess
 import requests
 import traceback

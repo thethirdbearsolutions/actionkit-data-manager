@@ -119,9 +119,21 @@ class JobTask(models.Model):
 
         return "(job:%s) task:%s" % (unicode(job), self.id)
 
+from django.contrib import admin
 from djangohelpers.lib import register_admin
+from djangohelpers.export_action import admin_list_export
 register_admin(BatchJob)
-register_admin(RecurringTask, also=['current_time'])
+
+def admin_make_active(modeladmin, request, queryset):
+    queryset.update(is_active=True)
+def admin_make_inactive(modeladmin, request, queryset):
+    queryset.update(is_active=False)
+
+class RecurringTaskAdmin(admin.ModelAdmin):
+    list_display = [f.name for f in RecurringTask._meta.fields] + ['current_time']
+    actions = [admin_list_export, admin_make_active, admin_make_inactive]
+admin.site.register(RecurringTask, RecurringTaskAdmin)
+
 register_admin(JobTask)
 
 class TaskBatch(models.Model):
