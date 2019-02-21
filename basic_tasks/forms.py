@@ -23,15 +23,16 @@ dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) el
 
 class ActionkitSpreadsheetForm(BatchForm):
 
-    exclude = forms.CharField(label="Comma separated list of IDs to exclude", required=True)
+    exclude = forms.CharField(label="Comma separated list of IDs to exclude (0 for auto appends, n/a to disable this feature)", required=True)
     google_client_id = forms.CharField(label="Client ID", required=True)
     google_client_secret = forms.CharField(label="Client secret", required=True)
     google_refresh_token = forms.CharField(label="Refresh token", required=True)
     google_spreadsheet_id = forms.CharField(label="Spreadsheet ID", required=True)
     google_worksheet_id = forms.CharField(label="Worksheet ID", required=True)
 
+    primary_key = forms.CharField(label="Name of column to dedupe against (default: primary_key)", required=False)
+    
     def run(self, task, rows):
-
         task_log = get_task_log()
 
         resp = requests.post("https://accounts.google.com/o/oauth2/token", data={
@@ -42,18 +43,49 @@ class ActionkitSpreadsheetForm(BatchForm):
         token = resp.json()['access_token']
         spr_client = gdata.spreadsheet.service.SpreadsheetsService(additional_headers={"Authorization": "Bearer %s" % token})
 
-        exclude = [int(i) for i in self.cleaned_data['exclude'].split(",")]
+        if self.cleaned_data['exclude'] == 'n/a':
+            exclude = []
+        else:
+            exclude = self.cleaned_data['exclude'].split(",")
         n_errors = n_rows = n_success = 0
 
+        feed = spr_client.GetCellsFeed(self.cleaned_data['google_spreadsheet_id'], self.cleaned_data['google_worksheet_id'])
+        existing = []
+
+        cols = []
+        for row in feed.entry:
+            if int(row.cell.row) > 1:
+                break
+            cols.append(row.cell.text.lower().replace("_", ""))
+
+        current_row = 2
+        obj = {}
+        for row in feed.entry:
+            if int(row.cell.row) < current_row:
+                continue
+            if int(row.cell.row) > current_row:
+                existing.append(obj)
+                obj = {}
+                current_row = int(row.cell.row)
+            obj[ cols[int(row.cell.col) - 1] ] = row.cell.text
+        existing.append(obj)
+
+        primary_key = self.cleaned_data.get("primary_key") or "primary_key"
+        existing_keys = [i[primary_key] for i in existing if primary_key in i]
+        
         for row in rows:
 
             n_rows += 1
-            id = row.pop("primary_key")
-            if id in exclude:
-                continue
             obj = {}
             for key, val in row.items():
-                obj[key.lower()] = unicode(val)
+                obj[key.lower().replace("_", "")] = unicode(val)
+
+            id = obj.get(primary_key.lower().replace("_", "")) if primary_key else None
+            if id and id in exclude:
+                continue
+            elif id and id in existing_keys:
+                continue
+            
             try:
                 spr_client.InsertRow(obj, 
                                      self.cleaned_data['google_spreadsheet_id'], 
@@ -64,8 +96,9 @@ class ActionkitSpreadsheetForm(BatchForm):
             else:
                 n_success += 1
                 exclude.append(id)
-        exclude = ','.join([str(i) for i in exclude])
-        task.form_data = json.dumps({"exclude": exclude})
+        if self.cleaned_data['exclude'] != 'n/a':
+            exclude = ','.join([str(i) for i in exclude])
+            task.form_data = json.dumps({"exclude": exclude})
         task.save()
 
         return n_rows, n_success, n_errors
@@ -562,6 +595,122 @@ All columns apart from action_id and new_data_* will be ignored by the job code
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['action_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+class PageCustomFieldJSONForm(BatchForm):
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("page_id") and int(row['page_id'])
+            assert row.get("page_type")
+
+            field_name = row['field_name']
+            endpoint = getattr(rest, "%spage" % row['page_type'].lower())
+            try:
+                current = endpoint.get(id=row['page_id']).get("fields", {})
+                previous = current = current.get(field_name)
+                try:
+                    current = json.loads(current)
+                except (TypeError, ValueError), e:
+                    previous = '{}'
+                    current = {}
+                    
+                current[str(row['json_primary_key'])] = row
+                new = json.dumps(current)
+
+                if json.loads(new) == json.loads(previous):
+                    continue
+                    
+                resp = getattr(rest, "%spage" % row['page_type'].lower()).patch(
+                    id=row['page_id'], fields={
+                        field_name: new
+                    })
+                resp = {
+                    'patch_response': resp
+                }
+                resp['log_id'] = row['page_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['page_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+        
+        return n_rows, n_success, n_error
+
+class PageModificationForm(BatchForm):
+    help_text = """
+The SQL must return columns named `page_id` and `page_type`
+
+All columns with prefix `new_data_` will be treated as new values
+for the core_[page_type]page attributes.  For example, `select id as page_id, 
+"signup" as page_type, concat("purple-", title)
+as new_data_title from core_page
+where id in (100,101);` would cause two signup page records to have "purple-"
+prepended to their titles.
+
+Columns prefixed new_data_page_* can also be used to set or update pagefield
+values.
+
+All columns apart from page_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("page_id") and int(row['page_id'])
+            assert row.get("page_type")
+            
+            new_values = {"id": row['page_id']}
+            new_values['fields'] = {}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                if key.startswith("new_data_page_"):
+                    new_values['fields'][key.replace("new_data_page_", "", 1)] = row[key]
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+            if not new_values['fields']: new_values.pop("fields")
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = getattr(rest, "%spage" % row['page_type'].lower()).patch(id=row['page_id'], **new_values)
+                resp = {
+                    'patch_response': resp
+                }
+                resp['log_id'] = row['page_id']
+                task_log.success_log(task, resp)
+            except Exception, e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['page_id']
                 resp['error'] = traceback.format_exc()
                 task_log.error_log(task, resp)
             else:

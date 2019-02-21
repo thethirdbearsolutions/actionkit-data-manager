@@ -1,6 +1,12 @@
 from main.task_registry import register_task
+from basic_tasks.google_tasks import (
+    CopyS3FilesToDriveForm,
+    AddSharedFolderToDriveForm,
+    DeleteMigratedFileFromS3Form,
+)
 from basic_tasks.forms import (
     UnsubscribeAndActJobForm,
+    PageModificationForm,
     ActionfieldRenameJobForm,
     UserfieldJobForm,
     EventFieldCreateForm,
@@ -12,8 +18,15 @@ from basic_tasks.forms import (
     ActionModificationForm,
     UserModificationForm,
     CustomFieldJSONForm,
+    PageCustomFieldJSONForm,
 )
 
+register_task("DeleteMigratedFileFromS3Job",
+             "Delete file from s3 if checksum matches Google Drive",
+             DeleteMigratedFileFromS3Form)
+register_task("AddSharedFolderToDriveJob", "Add shared folders to drive",
+              AddSharedFolderToDriveForm)
+register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
 register_task("CustomFieldJSONJob", 
@@ -33,6 +46,9 @@ register_task("ActionkitSpreadsheetJob",
               "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
 register_task("ActionModificationJob", "Modify Actions", ActionModificationForm)
+register_task("PageModificationJob", "Modify Pages", PageModificationForm)
+register_task("PageCustomFieldJSONJob", "Modify Page JSON Custom Field",
+              PageCustomFieldJSONForm)
 register_task("UserModificationJob", "Modify Users", UserModificationForm)
 register_task("EventFieldCreateJob",
               "Apply event field to batch", EventFieldCreateForm)
