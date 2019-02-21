@@ -1,3 +1,4 @@
+google-auth
 amqp==2.2.2
 amqplib==1.0.2
 anyjson==0.3.3

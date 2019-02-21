@@ -18,7 +18,7 @@ from django.utils import timezone
 from akdata.celery import app
 
 @app.task()
-def run_batch_job(task_id):
+def run_batch_job(task_id, query_string):
     task = JobTask.objects.get(id=task_id)
     recurrence = None
     job = task.parent_job 
@@ -54,9 +54,16 @@ def run_batch_job(task_id):
         else:
             message += "\n\n%s" % data
 
+    message += "\n\nView the logs: http://%s/logs/%s/" % (settings.SITE_DOMAIN, task.id)
+    message += "\n\nMake it recurring: http://%s/schedule/%s/" % (settings.SITE_DOMAIN, job.id)
+    message += "\n\nOr go back, to make edits or run it asynchronously: http://%s/batch-job/%s/?%s" % (
+        settings.SITE_DOMAIN,
+        job.type,
+        query_string,
+    )
+    
     message += "\n\nCheck it out here: http://%s/admin/main/jobtask/%s/" % (settings.SITE_DOMAIN, task.id)
     message += "\nThe job configuration is here: http://%s/admin/main/batchjob/%s/" % (settings.SITE_DOMAIN, job.id)
-    message += "\nMake it recurring here: http://%s/schedule/%s/" % (settings.SITE_DOMAIN, job.id)
 
     task.completed_on = datetime.datetime.now()
     task.save()
@@ -65,7 +72,7 @@ def run_batch_job(task_id):
         recurrence.is_running = False
         recurrence.save()
 
-    if task.error_count > 0 or task.num_rows > job.only_email_if_rows_above:
+    if 'failed' in subject or task.error_count > 0 or task.num_rows > job.only_email_if_rows_above:
         num = send_mail(
             subject, message, settings.DEFAULT_FROM_EMAIL,
             [job.created_by.email] + [i[1] for i in settings.ADMINS], 
@@ -73,7 +80,7 @@ def run_batch_job(task_id):
 
         print "Sent %s mails with subject %s; job %s completed; %s rows" % (
             num, subject, job.id, task.num_rows)
-    return message
+    return "%s\n\n%s" % (subject, message)
 
 @app.task()
 def run_recurring_tasks():
@@ -113,5 +120,5 @@ def run_recurring_tasks():
         task = JobTask(parent_recurring_task=r)
         task.save()
 
-        run_batch_job.delay(task.id)
+        run_batch_job.delay(task.id, "TODO")
 

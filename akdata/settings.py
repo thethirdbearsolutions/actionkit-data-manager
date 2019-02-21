@@ -140,6 +140,7 @@ import dj_database_url
 
 DATABASES = {
     'default': dj_database_url.config(),
+    'dummy': dj_database_url.config(env="ACTIONKIT_DUMMY_DATABASE_URL"),
     'ak': dj_database_url.config(env="ACTIONKIT_DATABASE_URL"),
     }
 
