@@ -45,7 +45,6 @@ register_task("DeleteMigratedFileFromS3Job",
 register_task("AddSharedFolderToDriveJob", "Add shared folders to drive",
               AddSharedFolderToDriveForm)
 register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
->>>>>>> wip-google-sheets
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
 register_task("CustomFieldJSONJob", 
