@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>View logs: {{ task }}</h1>
+
+<ul>
+  {% for type, count in types.items %}
+  <li><a href="./{{ type }}/">{{ type }}: {{ count }} entries</a></li>
+  {% endfor %}
+</ul>
+{% endblock %}
