@@ -22,6 +22,19 @@ import csv
 import json
 import io
 
+@allow_http("GET")
+@rendered_with("main/logs_index.html")
+def get_logs_index(request, id):
+    task = JobTask.objects.filter(id=id)
+    if 'filter' in request.GET:
+        logs = logs.filter(data__icontains=request.GET['filter'])
+    task = task.first()
+    _types = LogEntry.objects.filter(task=task).values_list("type", flat=True).distinct()
+    types = {}
+    for type in _types:
+        types[type] = LogEntry.objects.filter(task=task, type=type).count()
+    
+    return {"task": task, "types": types}
 
 def get_logs(request, id, type):
     task = JobTask.objects.filter(id=id)
@@ -50,6 +63,10 @@ def schedule(request, id):
             return redirect(".")
     return {"form": form, "job": job, "already": already}
 
+
+@rendered_with("main/job_results.html")
+def job_results(request, result):
+    return {"result": result}
 
 @allow_http("GET", "POST")
 @rendered_with("main/batch_job.html")
@@ -94,10 +111,10 @@ def batch_job(request, type):
     task.save()
 
     if request.POST.get("submit") == "Run Now, Synchronously":
-        result = run_batch_job(task.id)
-        return HttpResponse(result, content_type="text/plain")
+        result = run_batch_job(task.id, request.META['QUERY_STRING'])
+        return job_results(request, result)
     else:
-        run_batch_job.delay(task.id)
+        run_batch_job.delay(task.id, request.META['QUERY_STRING'])
 
         resp = redirect(".")
         resp['Location'] += '?' + request.META['QUERY_STRING']

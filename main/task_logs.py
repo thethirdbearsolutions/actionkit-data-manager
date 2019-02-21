@@ -24,10 +24,17 @@ class TaskLogger(object):
     def success_log(self, task, *args):
         logger.warn(self._str(task, *args))
 
+def dthandler(obj):
+    if hasattr(obj, 'isoformat'):
+        return obj.isoformat()
+    try:
+        return str(obj)
+    except Exception:
+        return None
+
 class SqlTaskLogger(object):
 
     def _log(self, task, type, *args):
-        dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.time) else None
         log_str = json.dumps(args, default=dthandler)
         LogEntry(task=task, type=type, data=log_str).save()
 

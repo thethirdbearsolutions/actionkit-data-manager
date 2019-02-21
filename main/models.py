@@ -21,7 +21,7 @@ class BatchJob(models.Model):
     title = models.CharField(max_length=255, null=True, blank=True)
 
     database = models.CharField(default='ak', max_length=255)
-    
+
     def __unicode__(self):
         if self.title:
             return "%s: %s" % (self.id, self.title)
@@ -111,6 +111,9 @@ class JobTask(models.Model):
 
     form_data = models.TextField(null=True, blank=True)
 
+    def current_time(self):
+        return timezone.now()
+        
     def __unicode__(self):
         job = self.parent_job
         task = self.parent_recurring_task
@@ -120,9 +123,15 @@ class JobTask(models.Model):
         return "(job:%s) task:%s" % (unicode(job), self.id)
 
 from djangohelpers.lib import register_admin
+from django.contrib import admin
+
+class JobTaskAdmin(admin.ModelAdmin):
+    list_display = ['id', 'parent_job', 'parent_recurring_task', 'created_on', 'completed_on', 'current_time', 'num_rows', 'success_count', 'error_count', 'form_data']
+    list_filter = ['parent_recurring_task', 'parent_job']
+
 register_admin(BatchJob)
 register_admin(RecurringTask, also=['current_time'])
-register_admin(JobTask)
+admin.site.register(JobTask, JobTaskAdmin)
 
 class TaskBatch(models.Model):
     tasks = models.TextField(null=True, blank=True)

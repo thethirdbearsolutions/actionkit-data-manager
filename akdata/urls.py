@@ -17,6 +17,10 @@ urlpatterns = [
         views.get_logs,
         name='get_logs'),
 
+    url(r'^logs/(?P<id>\d+)/$',
+        views.get_logs_index,
+        name='get_logs_index'),
+
     url(r'^admin/', include(admin.site.urls)),
     url(r'^pages/', include(flatpages_urls)),
 ]
