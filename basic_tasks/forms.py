@@ -1197,6 +1197,7 @@ All columns apart from signup_id and new_data_* will be ignored by the job code
                 task_log.error_log(task, resp)
             else:
                 n_success += 1
+                task_log.success_log(task, resp)
 
         return n_rows, n_success, n_error
 
@@ -1481,7 +1482,7 @@ each user is marked as acting on.</p>
             try:
                 resp = ak.act(action)
                 resp['log_id'] = row['user_id'] if user_id else row['email']
-                task_log.success_log(task, resp)
+                assert resp['status']
             except Exception, e:
                 n_error += 1
                 resp = {}
