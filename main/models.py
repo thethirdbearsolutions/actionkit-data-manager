@@ -140,10 +140,36 @@ admin.site.register(RecurringTask, RecurringTaskAdmin)
 
 from django.contrib import admin
 
-class JobTaskAdmin(admin.ModelAdmin):
-    list_display = ['id', 'parent_job', 'parent_recurring_task', 'created_on', 'completed_on', 'current_time', 'num_rows', 'success_count', 'error_count', 'form_data']
-    list_filter = ['parent_recurring_task', 'parent_job']
+class HasResultsListFilter(admin.SimpleListFilter):
+    title = "num rows"
+    parameter_name = "num_rows"
 
+    def lookups(self, request, model_admin):
+        return [
+            ("none", "None"),
+            ("some", "Some"),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == "none":
+            return queryset.filter(num_rows=0)
+        elif self.value() == "some":
+            return queryset.filter(num_rows__gt=0)
+        return queryset
+    
+class JobTaskAdmin(admin.ModelAdmin):
+
+    def get_logs_url(self, obj):
+        return "<a href='/logs/%s'>%s</a>" % (obj.id, 'logs')
+    get_logs_url.allow_tags = True
+    
+    list_display = ['id', 'get_logs_url',
+                    'parent_job', 'parent_recurring_task',
+                    'created_on', 'completed_on', 'current_time',
+                    'num_rows', 'success_count', 'error_count', 'form_data']
+    list_filter = [HasResultsListFilter, 'parent_recurring_task', 'parent_job']
+
+    
 admin.site.register(JobTask, JobTaskAdmin)
 
 class TaskBatch(models.Model):
