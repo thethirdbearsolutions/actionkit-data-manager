@@ -947,6 +947,12 @@ true as new_data_host_is_confirmed, "Turn left" as new_data_directions from even
 where id in (100,101);` would cause two event records to become confirmed
 and have their directions updated.
 
+Columns with prefix `tmpl_new_data_` will be run through Django's template engine
+and then treated as new values for the evente_event attributes as above. A dictionary
+representation of the row will be passed in as the template context. For example, 
+`select "An event in {{city}}, {{state}}" as tmpl_new_data_title, city, state 
+from events_event`.
+
 TODO, UNTESTED: Columns prefixed new_data_action_* can also be used to set or update 
 event custom field values.
 
@@ -971,9 +977,17 @@ All columns apart from event_id and new_data_* will be ignored by the job code
             new_values = {"id": row['event_id']}
             new_values['fields'] = {}
             for key in row:
-                if not key.startswith("new_data_"):
+                if key.startswith("tmpl_new_data_action_"):
+                    new_values['fields'][key.replace("tmpl_new_data_action_", "", 1)] = (
+                        Template(row[key]).render(Context(row))
+                    )
+                elif key.startswith("tmpl_new_data_"):
+                    new_values[key.replace("tmpl_new_data_", "", 1)] = (
+                        Template(row[key]).render(Context(row))
+                    )
+                elif not key.startswith("new_data_"):
                     continue
-                if key.startswith("new_data_action_"):
+                elif key.startswith("new_data_action_"):
                     new_values['fields'][key.replace("new_data_action_", "", 1)] = row[key]
                 else:
                     new_values[key.replace("new_data_", "", 1)] = row[key]
