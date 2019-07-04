@@ -12,6 +12,7 @@ from actionkit.rest import client as RestClient
 import apiclient.errors
 from apiclient.http import MediaFileUpload
 import boto3
+from googleapiclient.errors import HttpError
 
 class MissingFileError(Exception):
     def __init__(self, url, resp=None):
@@ -235,6 +236,12 @@ class CopyS3FilesToDriveForm(BatchForm):
                                           "error": "cannot_find_folder",
                                           "resp": e.message})
                 continue
+            except HttpError, e:
+                n_error += 1
+                task_log.error_log(task, {"row": row,
+                                          "error": "unknown_error",
+                                          "resp": str(e)})
+                continue
             task_log.activity_log(task, {"row": row, "google": googleInfo})
             fields = {
                 row['id_field']: googleInfo['id'] if not row['id_value'] else None,
@@ -276,7 +283,7 @@ class CopyS3FilesToDriveForm(BatchForm):
         folder_id = folder['files'][0]['id']
         
         files = api.files().list(
-            q="'%s' in parents and (name='%s' or name='%s')" % (folder_id, filename, urllib.unquote(filename)),
+            q="'%s' in parents and (name='%s' or name='%s')" % (folder_id, filename.replace("'", "\\'"), urllib.unquote(filename).replace("'", "\\'")),
             fields="files(id,name,md5Checksum,webContentLink)",
         ).execute()
         for file in files['files']:
