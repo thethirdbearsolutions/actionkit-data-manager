@@ -15,7 +15,9 @@ import traceback
 
 from actionkit import Client
 from actionkit.rest import client as RestClient
-from actionkit.models import CoreAction, CoreActionField, QueryReport
+from actionkit.models import (
+    CoreAction, CoreActionField, QueryReport, CoreTag, CorePageField, CorePage
+)
 
 from main.forms import BatchForm, get_task_log
 from urllib2 import quote, urlopen
@@ -30,6 +32,120 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 import urllib
 from django.template import defaultfilters 
 
+class TagSyncForm(BatchForm):
+
+    ak_tag_prefix = forms.CharField(required=False)
+    ak_tag_suffix = forms.CharField(required=False)
+    tag_mapping_database_page_id = forms.IntegerField(required=True)
+
+    def run(self, task, rows):
+        task_log = get_task_log()
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            n_rows += 1
+
+            try:
+                tag_id, did_something = self.find_or_create_tag(
+                    task, 
+                    row['tag_unique_identifier'],
+                    row['new_data_tag_name'],
+                    self.cleaned_data.get("ak_tag_prefix"),
+                    self.cleaned_data.get("ak_tag_suffix"),
+                )
+            except Exception, e:
+                n_error += 1
+                task_log.error_log(task, {
+                    "row": row,
+                    "error": str(e),
+                })
+            else:
+                n_success += 1 if did_something else 0
+
+        return n_rows, n_success, n_error
+    
+    def find_or_create_tag(self, task,
+                           tag_uuid, tag_name,
+                           ak_tag_prefix, ak_tag_suffix):
+
+        task_log = get_task_log()
+
+        rest = RestClient()
+        rest.safety_net = False
+
+        desired_tag_name = []
+        if ak_tag_prefix:
+            desired_tag_name.append(ak_tag_prefix)
+        desired_tag_name.append(tag_name)
+        if ak_tag_suffix:
+            desired_tag_name.append(ak_tag_suffix)
+        desired_tag_name = ' '.join(desired_tag_name)
+
+        fields = CorePageField.objects.using("ak").filter(
+            parent_id=self.cleaned_data['tag_mapping_database_page_id'],
+            name='zyx_stashing_data_code',
+        )
+        fields = dict(
+            f.value.split('=', 1) for f in fields
+        )
+
+        created_tag = False
+        patched_tag = False
+        found_tag_unaccounted_for = False
+        ak_tag_id = None
+        ak_tag_name = None
+
+        try:
+            ak_tag_id = fields[str(tag_uuid)]
+        except KeyError:
+            try:
+                ak_tag_id = rest.tag.create(
+                    name=desired_tag_name,
+                )
+            except AssertionError, e:
+                ak_tag_id = CoreTag.objects.using("ak").get(name=desired_tag_name).id
+                fields[tag_uuid] = ak_tag_id
+                created_tag = True
+                found_tag_unaccounted_for = True
+            else:
+                fields[tag_uuid] = ak_tag_id
+                created_tag = True
+        else:
+            ak_tag_name = rest.tag.get(id=ak_tag_id)['name']
+            if ak_tag_name != desired_tag_name:
+                task_log.activity_log(task, {
+                    "message": "patching tag",
+                    "id": ak_tag_id,
+                    "current_name": ak_tag_name,
+                    "new_name": desired_tag_name,
+                })
+                rest.tag.patch(id=ak_tag_id, name=desired_tag_name)
+                patched_tag = True
+
+        if created_tag:
+            serialized_fields = [
+                '%s=%s' % (key, value)
+                for key, value
+                in fields.items()
+            ]
+
+            task_log.activity_log(task, {
+                "message": "patching tag mapping db",
+                "ak_tag_name": ak_tag_name,
+                "ak_tag_id": ak_tag_id,
+                "new_name": desired_tag_name,
+                "created_tag": created_tag,
+                "found_tag_unaccounted_for": found_tag_unaccounted_for,
+                "page_id": self.cleaned_data['tag_mapping_database_page_id'],
+                "fields": {'zyx_stashing_data_code': serialized_fields},
+            })
+            rest.signuppage.patch(
+                id=self.cleaned_data['tag_mapping_database_page_id'],
+                fields={'zyx_stashing_data_code': serialized_fields},
+            )
+
+        return ak_tag_id, (created_tag or patched_tag)
+    
 class CloudinaryImageForm(BatchForm):
     
     template = forms.CharField(label="Cloudinary URL template", required=True)
@@ -815,6 +931,97 @@ class PageCustomFieldJSONForm(BatchForm):
         
         return n_rows, n_success, n_error
 
+class PageCreationForm(BatchForm):
+    help_text = ""
+
+    def find_page(self, task, page_uuid):
+        return CorePage.objects.using("ak").filter(
+                notes__endswith=page_uuid,
+        ).first()
+
+    def create_page(self, task, row):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+        
+        page_values = {}
+        form_values = {}
+        followup_values = {}
+        for key in row:
+            if key.startswith("new_data_page_"):
+                page_values[
+                    key.replace("new_data_page_", "", 1)] = row[key]
+            elif key.startswith("new_data_form_"):
+                form_values[
+                    key.replace("new_data_form_", "", 1)] = row[key]
+            elif key.startswith("new_data_followup_"):
+                followup_values[
+                    key.replace("new_data_followup_", "", 1)] = row[key]
+                
+        page_endpoint = getattr(rest, '%spage' % row['page_type'].lower())
+        form_endpoint = getattr(rest, '%sform' % row['page_type'].lower())
+
+        task_log.activity_log(task, {"page": page_values})
+        try:
+            page_id = id = page_endpoint.create(**page_values)
+        except Exception, e:
+            task_log.error_log(
+                task, {"request": page_values, "error": str(e)})
+            return False
+
+        form_id = followup_id = None
+        if row['page_type'].lower() != 'import':
+            task_log.activity_log(task, {"page": id, "form": form_values})
+            form_values['page'] = '/rest/v1/%spage/%s/' % (
+                row['page_type'].lower(), id)
+            try:
+                form_id = id = form_endpoint.create(**form_values)
+            except Exception, e:
+                task_log.error_log(
+                    task, {"request": form_values, "error": str(e)})
+                return False
+
+            task_log.activity_log(
+                task, {"page": page_id, "followup": followup_values})
+            followup_values['page'] = '/rest/v1/%spage/%s/' % (
+                row['page_type'].lower(), page_id)
+            try:
+                followup_id = rest.pagefollowup.create(**followup_values)
+            except Exception, e:
+                task_log.error_log(
+                    task, {"request": followup_values, "error": str(e)})
+                return False
+
+        task_log.success_log(task, {
+            "page_id": page_id, "form_id": form_id, "followup_id": followup_id,
+        })
+        return page_id
+    
+    def run(self, task, rows):
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("page_type")
+
+            page = None
+            if row.get("page_unique_identifier"):
+                page = self.find_page(task, row['page_unique_identifier'])
+
+            if not page:
+                result = self.create_page(task, row)
+                if result:
+                    n_success += 1
+                else:
+                    n_error += 1
+
+        return n_rows, n_success, n_error
+
 class PageModificationForm(BatchForm):
     help_text = """
 The SQL must return columns named `page_id` and `page_type`
@@ -829,9 +1036,36 @@ prepended to their titles.
 Columns prefixed new_data_page_* can also be used to set or update pagefield
 values.
 
+A special columns new_data_page_tags can be used to tag the page with a comma-separated list of tag IDs.
+
+Alternatively, a special column new_data_page_tag_unique_identifiers can be used to tag the page with a comma-separated list of tag UUIDs if a tag_mapping_database_page_id is provided.
+
 All columns apart from page_id and new_data_* will be ignored by the job code
 (but can be used to review records for accuracy, log old values, etc)
 """
+
+    tag_mapping_database_page_id = forms.IntegerField(required=False)    
+    
+    def find_page(self, page_uuid):
+        return CorePage.objects.using("ak").filter(
+                notes__endswith=page_uuid,
+        ).first()
+
+    def find_tag(self, tag_uuid):
+        if hasattr(self, '_cached_find_tag'):
+            fields = getattr(self, '_cached_find_tag')
+        else:
+            fields = CorePageField.objects.using("ak").filter(
+                parent_id=self.cleaned_data['tag_mapping_database_page_id'],
+                name='zyx_stashing_data_code',
+            )
+            fields = dict(
+                f.value.split('=', 1) for f in fields
+            )
+            setattr(self, '_cached_find_tag', fields)
+
+        return fields[str(tag_uuid)]
+    
     def run(self, task, rows):
         rest = RestClient()
         rest.safety_net = False
@@ -844,20 +1078,49 @@ All columns apart from page_id and new_data_* will be ignored by the job code
             task_log.sql_log(task, row)
             n_rows += 1
 
+            if row.get("page_unique_identifier") and not row.get("page_id"):
+                page = self.find_page(row['page_unique_identifier'])
+                if not page:
+                    task_log.error_log(task, {
+                        "message": "Could not find page",
+                        "page_unique_identifier": row.get("page_unique_identifier"),
+                        "row": row,
+                    })
+                    continue
+                row['page_id'] = page.id
+            
             assert row.get("page_id") and int(row['page_id'])
             assert row.get("page_type")
             
             new_values = {"id": row['page_id']}
             new_values['fields'] = {}
+            new_values['tags'] = []
+                        
             for key in row:
                 if not key.startswith("new_data_"):
                     continue
-                if key.startswith("new_data_page_"):
+                if key == "new_data_page_tag_unique_identifiers":
+                    try:
+                        new_values['tags'] = [
+                            int(self.find_tag(k))
+                            for k in row[key].split(",")
+                        ]
+                    except KeyError, e:
+                        task_log.error_log(task, {
+                            "row": row,
+                            "message": "Could not find tag",
+                            "error": str(e),
+                        })
+                        continue                        
+                elif key == "new_data_page_tags":
+                    new_values['tags'] = [int(k) for k in row[key].split(",")]
+                elif key.startswith("new_data_page_"):
                     new_values['fields'][key.replace("new_data_page_", "", 1)] = row[key]
                 else:
                     new_values[key.replace("new_data_", "", 1)] = row[key]
             if not new_values['fields']: new_values.pop("fields")
-
+            if not new_values['tags']: new_values.pop('tags')
+            
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:

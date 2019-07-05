@@ -6,8 +6,10 @@ from basic_tasks.google_tasks import (
 )
 from basic_tasks.forms import (
     UnsubscribeAndActJobForm,
+    TagSyncForm,
     UserMergeForm,
-    PageModificationForm,
+    PageCreationForm,
+    PageModificationForm,    
     ActionfieldRenameJobForm,
     UserfieldJobForm,
     EventFieldCreateForm,
@@ -31,6 +33,7 @@ from basic_tasks.mailchimp import (
     MailchimpRemoveSubscriberTagForm,    
 )
 
+register_task("TaskSyncJob", "Sync tags", TagSyncForm)
 register_task("CloudinaryImageJob", "Cloudinary", CloudinaryImageForm)
 register_task("MailchimpAddSubscriberJob", "Push subscriber info to Mailchimp",
               MailchimpAddSubscriberForm)
@@ -65,6 +68,7 @@ register_task("ActionkitSpreadsheetJob",
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
 register_task("ActionModificationJob", "Modify Actions", ActionModificationForm)
 register_task("PageModificationJob", "Modify Pages", PageModificationForm)
+register_task("PageCreationJob", "Create Pages", PageCreationForm)
 register_task("PageCustomFieldJSONJob", "Modify Page JSON Custom Field",
               PageCustomFieldJSONForm)
 register_task("UserModificationJob", "Modify Users", UserModificationForm)
