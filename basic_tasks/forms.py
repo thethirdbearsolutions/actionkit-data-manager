@@ -1410,7 +1410,7 @@ All columns apart from user_id and new_data_* will be ignored by the job code
 class UnsubscribeAndActJobForm(BatchForm):
     help_text = """
 <p>The SQL must return a column named `user_id` OR a column named `email`.</p>
-
+<p>The SQL may return a column named `page_name_to_act_on` if this should vary per row.</p>
 <p>Unsubscribes will only occur for rows with a `user_id`. The `email` column 
 can only be used for the "act" portion of this job, either to create actions 
 for not-yet-existing users, or to create actions without first looking up
@@ -1433,7 +1433,6 @@ each user is marked as acting on.</p>
     def run(self, task, rows):
         lists = self.cleaned_data.get('unsubscribe_lists') or ""
         lists = [int(i.strip()) for i in lists.split(",") if i]
-        page = self.cleaned_data.get('action_page', '').strip() or None
 
         ak = Client()
 
@@ -1466,6 +1465,9 @@ each user is marked as acting on.</p>
                     pass
                 else:
                     unsubs.append(list_id)
+            page = self.cleaned_data.get('action_page', '').strip() or None
+            if page is None:
+                page = row.get("page_name_to_act_on")        
             if page is None:
                 continue
             if user_id:
