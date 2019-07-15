@@ -97,6 +97,10 @@ class RecurringTask(models.Model):
         runs = list(runs)
         return runs[:-2]
 
+class RecurringTaskConflict(models.Model):
+    recurring_tasks = models.ManyToManyField(RecurringTask)
+    description = models.TextField()
+
 class JobTask(models.Model):
     parent_job = models.ForeignKey(BatchJob, null=True, blank=True)
     parent_recurring_task = models.ForeignKey(RecurringTask,
@@ -176,6 +180,8 @@ class JobTaskAdmin(admin.ModelAdmin):
 
     
 admin.site.register(JobTask, JobTaskAdmin)
+
+register_admin(RecurringTaskConflict)
 
 class TaskBatch(models.Model):
     tasks = models.TextField(null=True, blank=True)
