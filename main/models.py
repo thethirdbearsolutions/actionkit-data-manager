@@ -5,6 +5,7 @@ from djcelery.models import TaskState
 import decimal
 
 from main import task_registry
+from actionkit.rest import run_query
 
 class LogEntry(models.Model):
     task = models.ForeignKey('main.JobTask')
@@ -41,6 +42,21 @@ class BatchJob(models.Model):
     def get_form(self, recurrence=None):
         return self.form_factory.from_job(self, recurrence=recurrence)
 
+    def run_sql_api(self, ctx={}):
+        cursor = connections[self.database].cursor()
+        
+        sql = self.sql
+        if ctx and '{form[' in sql:
+            sql = sql.format(form=ctx)
+
+        cursor.execute(sql)
+        
+        results = run_query(sql)
+
+        for row in results:
+            row = [float(i) if isinstance(i, decimal.Decimal) else i for i in row]
+            yield dict(zip([i[0] for i in cursor.description], row))
+        
     def run_sql(self, ctx={}):
         cursor = connections[self.database].cursor()
         sql = self.sql
