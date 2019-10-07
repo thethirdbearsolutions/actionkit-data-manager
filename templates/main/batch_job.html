@@ -18,6 +18,12 @@ input, textarea, select, .uneditable-input {
   <input type="submit" value="Preview" />
 </form>
 
+{% if err %}
+<div style="border: 1px dashed red;">
+  {{ err }}
+</div>
+{% endif %}
+
 {% if preview %}
 <table>
 <thead>

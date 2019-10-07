@@ -113,6 +113,10 @@ class RecurringTask(models.Model):
         runs = list(runs)
         return runs[:-2]
 
+class RecurringTaskConflict(models.Model):
+    recurring_tasks = models.ManyToManyField(RecurringTask)
+    description = models.TextField()
+
 class JobTask(models.Model):
     parent_job = models.ForeignKey(BatchJob, null=True, blank=True)
     parent_recurring_task = models.ForeignKey(RecurringTask,
@@ -178,15 +182,22 @@ class JobTaskAdmin(admin.ModelAdmin):
     def get_logs_url(self, obj):
         return "<a href='/logs/%s'>%s</a>" % (obj.id, 'logs')
     get_logs_url.allow_tags = True
+
+    def get_parent_recurring_task(self, obj):
+        if obj.parent_recurring_task_id:
+            return "<a href='/admin/main/recurringtask/%s/'>%s</a>" % (obj.parent_recurring_task_id, obj.parent_recurring_task)
+    get_parent_recurring_task.allow_tags = True
     
     list_display = ['id', 'get_logs_url',
-                    'parent_job', 'parent_recurring_task',
+                    'parent_job', 'get_parent_recurring_task',
                     'created_on', 'completed_on', 'current_time',
                     'num_rows', 'success_count', 'error_count', 'form_data']
     list_filter = [HasResultsListFilter, 'parent_recurring_task', 'parent_job']
 
     
 admin.site.register(JobTask, JobTaskAdmin)
+
+register_admin(RecurringTaskConflict)
 
 class TaskBatch(models.Model):
     tasks = models.TextField(null=True, blank=True)
