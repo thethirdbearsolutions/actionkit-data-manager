@@ -18,6 +18,11 @@ class BatchJob(models.Model):
     sql = models.TextField()
     form_data = models.TextField(default="{}")
     only_email_if_rows_above = models.IntegerField(default=0)
+    run_via = models.CharField(
+        max_length=10,
+        default='client-db',
+        choices=(("client-db", "client-db"), ("api", "api"))
+    )
 
     title = models.CharField(max_length=255, null=True, blank=True)
 

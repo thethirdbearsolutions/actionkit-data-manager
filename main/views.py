@@ -95,7 +95,7 @@ def batch_job(request, type):
 
     if request.method == "GET":
         try:
-            _rows = job.run_sql(form.get_data())
+            _rows = job.run_sql_api(form.get_data())
             limit = request.GET.get("limit", 100)
             rows = []
             while len(rows) < limit:

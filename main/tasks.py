@@ -27,8 +27,11 @@ def run_batch_job(task_id, query_string):
         job = recurrence.parent_job 
 
     form = job.get_form(recurrence=recurrence)
-    rows = job.run_sql(form.get_data())
-
+    if job.run_via == 'api':
+        rows = job.run_sql_api(form.get_data())
+    else:
+        rows = job.run_sql(form.get_data())
+        
     name = job.title
     try:
         task.num_rows, task.success_count, task.error_count = form.run(task, rows)
