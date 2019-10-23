@@ -12,7 +12,7 @@ certifi==2017.11.5
 chardet==3.0.4
 cryptography>=2.3
 dj-database-url==0.4.2
-Django==1.11.20
+Django==1.11.23
 django-actionkit-client==0.17
 django-appconf==1.0.2
 django-celery==3.2.2
