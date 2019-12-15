@@ -15,6 +15,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='batchjob',
             name='run_via',
-            field=models.CharField(choices=[(b'client-db', b'client-db'), (b'api', b'api')], default=b'client-db', max_length=10),
+            field=models.CharField(choices=[(b'client-db', b'client-db'), (b'api', b'api')], default=b'client-db', max_length=20),
         ),
     ]
