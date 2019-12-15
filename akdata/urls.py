@@ -1,7 +1,7 @@
 from django.conf.urls import include, url
 from django.conf import settings
 from django.contrib import admin
-from django.contrib.flatpages import urls as flatpages_urls
+
 admin.autodiscover()
 
 from main import views
@@ -21,8 +21,8 @@ urlpatterns = [
         views.get_logs_index,
         name='get_logs_index'),
 
-    url(r'^admin/', include(admin.site.urls)),
-    url(r'^pages/', include(flatpages_urls)),
+    url(r'^admin/', admin.site.urls),
+    url(r'^pages/', include('django.contrib.flatpages.urls')),
 ]
 
 if settings.DEBUG:

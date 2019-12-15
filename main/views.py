@@ -37,8 +37,7 @@ def get_logs_index(request, id):
     return {"task": task, "types": types}
 
 def get_logs(request, id, type):
-    task = JobTask.objects.filter(id=id)
-    logs = LogEntry.objects.filter(task=task, type=type)
+    logs = LogEntry.objects.filter(task__id=id, type=type)
     if 'filter' in request.GET:
         logs = logs.filter(data__icontains=request.GET['filter'])
     return HttpResponse(json.dumps(
@@ -95,17 +94,20 @@ def batch_job(request, type):
 
     if request.method == "GET":
         try:
-            _rows = job.run_sql_api(form.get_data())
+            if job.sql.lower().strip().startswith('describe'):
+                _rows = job.run_sql(form.get_data())
+            else:
+                _rows = job.run_sql(form.get_data())
             limit = request.GET.get("limit", 100)
             rows = []
             while len(rows) < limit:
                 try:
-                    rows.append(_rows.next())
+                    rows.append(next(_rows))
                 except StopIteration:
                     break
             preview = True
             return locals() 
-        except Exception, err:
+        except Exception as err:
             rows = []
             return locals()
 

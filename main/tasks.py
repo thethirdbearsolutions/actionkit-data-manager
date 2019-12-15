@@ -35,7 +35,7 @@ def run_batch_job(task_id, query_string):
     name = job.title
     try:
         task.num_rows, task.success_count, task.error_count = form.run(task, rows)
-    except Exception, e:
+    except Exception as e:
         message = traceback.format_exc()
         subject = "[ActionKit Data Manager] Task %s (%s) failed :-(" % (task.id, name)
     else:
@@ -81,8 +81,8 @@ def run_batch_job(task_id, query_string):
             [job.created_by.email] + [i[1] for i in settings.ADMINS], 
             fail_silently=False)
 
-        print "Sent %s mails with subject %s; job %s completed; %s rows" % (
-            num, subject, job.id, task.num_rows)
+        print("Sent %s mails with subject %s; job %s completed; %s rows" % (
+            num, subject, job.id, task.num_rows))
     return "%s\n\n%s" % (subject, message)
 
 def has_conflicts(task):
@@ -95,7 +95,7 @@ def has_conflicts(task):
 @app.task()
 def run_recurring_tasks():
 
-    print "Looking for tasks..."
+    print("Looking for tasks...")
 
     now = timezone.now()
 
@@ -112,7 +112,7 @@ def run_recurring_tasks():
                     task.is_running = True
                     task.save()
                 else:
-                    print "Task %s is conflicted, will not run yet" % task
+                    print("Task %s is conflicted, will not run yet" % task)
                 
         elif task.period_unit == "hours":
             if task.last_started_on is None or task.last_started_on < now - relativedelta(hours=task.period):
@@ -121,7 +121,7 @@ def run_recurring_tasks():
                     task.is_running = True
                     task.save()
                 else:
-                    print "Task %s is conflicted, will not run yet" % task
+                    print("Task %s is conflicted, will not run yet" % task)
                 
         elif task.period_unit == "days":
             if task.last_started_on is None or task.last_started_on < now - relativedelta(days=task.period):
@@ -130,7 +130,7 @@ def run_recurring_tasks():
                     task.is_running = True
                     task.save()
                 else:
-                    print "Task %s is conflicted, will not run yet" % task
+                    print("Task %s is conflicted, will not run yet" % task)
                 
     for r in active_tasks:
         job = r.parent_job

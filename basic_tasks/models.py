@@ -1,9 +1,10 @@
 from main.task_registry import register_task
-from basic_tasks.google_tasks import (
-    CopyS3FilesToDriveForm,
-    AddSharedFolderToDriveForm,
-    DeleteMigratedFileFromS3Form,
-)
+#from basic_tasks.google_tasks import (
+#    CopyS3FilesToDriveForm,
+#    AddSharedFolderToDriveForm,
+#    DeleteMigratedFileFromS3Form,
+#    ActionkitSpreadsheetForm
+#)
 from basic_tasks.forms import (
     UnsubscribeAndActJobForm,
     TagSyncForm,
@@ -16,9 +17,10 @@ from basic_tasks.forms import (
     ActionCloneForm,
     EventGeolocationForm,
     PublishReportResultsForm,
-    ActionkitSpreadsheetForm,
     ActionDeleteJobForm,
     ActionModificationForm,
+    OrderModificationForm,
+    TransactionModificationForm,    
     UserModificationForm,
     EventModificationForm,
     EventHtmlEntitiesForm,
@@ -42,12 +44,12 @@ register_task("MailchimpAddSubscriberTagJob", "Add Mailchimp tag to subscriber",
 register_task("MailchimpRemoveSubscriberTagJob", "Remove Mailchimp tag from subscriber",
               MailchimpRemoveSubscriberTagForm)
 register_task("UserMergeJob", "Merge users", UserMergeForm)
-register_task("DeleteMigratedFileFromS3Job",
-             "Delete file from s3 if checksum matches Google Drive",
-             DeleteMigratedFileFromS3Form)
-register_task("AddSharedFolderToDriveJob", "Add shared folders to drive",
-              AddSharedFolderToDriveForm)
-register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
+#register_task("DeleteMigratedFileFromS3Job",
+#             "Delete file from s3 if checksum matches Google Drive",
+#             DeleteMigratedFileFromS3Form)
+#register_task("AddSharedFolderToDriveJob", "Add shared folders to drive",
+#              AddSharedFolderToDriveForm)
+#register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
 register_task("CustomFieldJSONJob", 
@@ -63,10 +65,12 @@ register_task("PublishReportResultsJob",
               "Run and Publish Reports", PublishReportResultsForm)
 register_task("ActionCloneJob", "Clone and potentially delete actions",
               ActionCloneForm)
-register_task("ActionkitSpreadsheetJob", 
-              "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
+#register_task("ActionkitSpreadsheetJob", 
+#              "Stream sql results to a Google spreadsheet", ActionkitSpreadsheetForm)
 register_task("ActionDeleteJob", "Delete Actions", ActionDeleteJobForm)
 register_task("ActionModificationJob", "Modify Actions", ActionModificationForm)
+register_task("OrderModificationJob", "Modify Orders", OrderModificationForm)
+register_task("TransactionModificationJob", "Modify Transactionss", TransactionModificationForm)
 register_task("PageModificationJob", "Modify Pages", PageModificationForm)
 register_task("PageCreationJob", "Create Pages", PageCreationForm)
 register_task("PageCustomFieldJSONJob", "Modify Page JSON Custom Field",

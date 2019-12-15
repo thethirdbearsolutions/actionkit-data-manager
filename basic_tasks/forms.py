@@ -4,7 +4,6 @@ from django import forms
 from django.conf import settings
 from django.db import connections
 from django.template import Template, Context
-import gdata.spreadsheet.service
 import gzip
 import json
 import os
@@ -12,6 +11,8 @@ import shutil
 import subprocess
 import requests
 import traceback
+import lxml.html
+import lxml.etree as ET
 
 from actionkit import Client
 from actionkit.rest import client as RestClient
@@ -20,16 +21,42 @@ from actionkit.models import (
 )
 
 from main.forms import BatchForm, get_task_log
-from urllib2 import quote, urlopen
+from urllib.parse import quote, unquote, parse_qs
+from urllib.request import urlopen
 from json import load
 
-import HTMLParser
-import urllib2
+user_agent_list = [
+   #Chrome
+    'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 5.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 6.3; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
+    #Firefox
+    'Mozilla/4.0 (compatible; MSIE 9.0; Windows NT 6.1)',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; WOW64; Trident/5.0)',
+    'Mozilla/5.0 (Windows NT 6.1; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (Windows NT 6.2; WOW64; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.0; Trident/5.0)',
+    'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)',
+    'Mozilla/5.0 (Windows NT 6.1; Win64; x64; Trident/7.0; rv:11.0) like Gecko',
+    'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; WOW64; Trident/6.0)',
+    'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)',
+    'Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 5.1; Trident/4.0; .NET CLR 2.0.50727; .NET CLR 3.0.4506.2152; .NET CLR 3.5.30729)'
+]
+import random
+from html.parser import HTMLParser
 
 dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) else None
 
 from django.contrib.humanize.templatetags.humanize import intcomma
-import urllib
 from django.template import defaultfilters 
 
 class TagSyncForm(BatchForm):
@@ -53,7 +80,7 @@ class TagSyncForm(BatchForm):
                     self.cleaned_data.get("ak_tag_prefix"),
                     self.cleaned_data.get("ak_tag_suffix"),
                 )
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "row": row,
@@ -102,7 +129,7 @@ class TagSyncForm(BatchForm):
                 ak_tag_id = rest.tag.create(
                     name=desired_tag_name,
                 )
-            except AssertionError, e:
+            except AssertionError as e:
                 ak_tag_id = CoreTag.objects.using("ak").get(name=desired_tag_name).id
                 fields[tag_uuid] = ak_tag_id
                 created_tag = True
@@ -170,7 +197,7 @@ class CloudinaryImageForm(BatchForm):
             )).upper()
 
             for key in row:
-                row[key] = urllib.quote(str(row[key]).replace(',', "%2C").replace('/', "%2F"))
+                row[key] = quote(str(row[key]).replace(',', "%2C").replace('/', "%2F"))
 
             url = self.cleaned_data['template'].format(**row)
         
@@ -196,7 +223,7 @@ class CloudinaryImageForm(BatchForm):
                     "s3://%s/%s.png" % (self.cleaned_data['s3_location'], row['filename'])
                 ])
                 
-            except Exception, e:
+            except Exception as e:
                 n_errors += 1
                 task_log.error_log(task, {"row": row, "error": str(e)})
             else:
@@ -204,87 +231,6 @@ class CloudinaryImageForm(BatchForm):
 
         return n_rows, n_success, n_errors
 
-class ActionkitSpreadsheetForm(BatchForm):
-
-    exclude = forms.CharField(label="Comma separated list of IDs to exclude (0 for auto appends, n/a to disable this feature)", required=True)
-    google_client_id = forms.CharField(label="Client ID", required=True)
-    google_client_secret = forms.CharField(label="Client secret", required=True)
-    google_refresh_token = forms.CharField(label="Refresh token", required=True)
-    google_spreadsheet_id = forms.CharField(label="Spreadsheet ID", required=True)
-    google_worksheet_id = forms.CharField(label="Worksheet ID", required=True)
-
-    primary_key = forms.CharField(label="Name of column to dedupe against (default: primary_key)", required=False)
-    
-    def run(self, task, rows):
-        task_log = get_task_log()
-
-        resp = requests.post("https://accounts.google.com/o/oauth2/token", data={
-            "grant_type": "refresh_token",
-            "refresh_token": self.cleaned_data['google_refresh_token'],
-            "client_id": self.cleaned_data['google_client_id'],
-            "client_secret": self.cleaned_data['google_client_secret']})
-        token = resp.json()['access_token']
-        spr_client = gdata.spreadsheet.service.SpreadsheetsService(additional_headers={"Authorization": "Bearer %s" % token})
-
-        if self.cleaned_data['exclude'] == 'n/a':
-            exclude = []
-        else:
-            exclude = self.cleaned_data['exclude'].split(",")
-        n_errors = n_rows = n_success = 0
-
-        feed = spr_client.GetCellsFeed(self.cleaned_data['google_spreadsheet_id'], self.cleaned_data['google_worksheet_id'])
-        existing = []
-
-        cols = []
-        for row in feed.entry:
-            if int(row.cell.row) > 1:
-                break
-            cols.append(row.cell.text.lower().replace("_", ""))
-
-        current_row = 2
-        obj = {}
-        for row in feed.entry:
-            if int(row.cell.row) < current_row:
-                continue
-            if int(row.cell.row) > current_row:
-                existing.append(obj)
-                obj = {}
-                current_row = int(row.cell.row)
-            obj[ cols[int(row.cell.col) - 1] ] = row.cell.text
-        existing.append(obj)
-
-        primary_key = self.cleaned_data.get("primary_key") or "primary_key"
-        existing_keys = [i[primary_key] for i in existing if primary_key in i]
-        
-        for row in rows:
-
-            n_rows += 1
-            obj = {}
-            for key, val in row.items():
-                obj[key.lower().replace("_", "")] = unicode(val)
-
-            id = obj.get(primary_key.lower().replace("_", "")) if primary_key else None
-            if id and id in exclude:
-                continue
-            elif id and id in existing_keys:
-                continue
-            
-            try:
-                spr_client.InsertRow(obj, 
-                                     self.cleaned_data['google_spreadsheet_id'], 
-                                     self.cleaned_data['google_worksheet_id'])
-            except Exception, e:
-                n_errors += 1
-                task_log.error_log(task, {"row": obj, "error": str(e)})
-            else:
-                n_success += 1
-                exclude.append(id)
-        if self.cleaned_data['exclude'] != 'n/a':
-            exclude = ','.join([str(i) for i in exclude])
-            task.form_data = json.dumps({"exclude": exclude})
-        task.save()
-
-        return n_rows, n_success, n_errors
 
 class EventGeolocationForm(BatchForm):
     google_api_key = forms.CharField(label="Google API Key", required=True)
@@ -324,7 +270,7 @@ class EventGeolocationForm(BatchForm):
                 continue
             try:
                 coords = self.get_coords(addr)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "event": row['event_id'],
@@ -345,7 +291,7 @@ class EventGeolocationForm(BatchForm):
                     'geocoded_latitude': coords[0],
                     'geocoded_longitude': coords[1],
                 })
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "event": row['event_id'],
@@ -394,7 +340,7 @@ class EventFieldCreateForm(BatchForm):
                     fields[field_name] = (field_value or row['field_value']).split(separator)
                 
                 resp = ak.Event.set_custom_fields(fields)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {"log_id": row['event_id'], "error": traceback.format_exc()}
                 task_log.error_log(task, resp)
@@ -483,7 +429,7 @@ class PublishReportResultsForm(BatchForm):
                 "/tmp/%s.old" % self.cleaned_data['filename'],
                 "/tmp/%s" % self.cleaned_data['filename'],
             ])
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             diff = e.output.splitlines()
             task.form_data = json.dumps({"diff": e.output})
             task.save()
@@ -497,7 +443,7 @@ class PublishReportResultsForm(BatchForm):
                 "s3://%s/" % self.cleaned_data['bucket']
             ]
             subprocess.check_call(cmd)
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             task_log.error_log(task, {
                 "stage": "s3cmd_put",
                 "errorcode": e.returncode,
@@ -534,7 +480,7 @@ Required columns: merge_from_user_id, merge_to_user_id, whose_address ("from" or
                         '/rest/v1/user/%s/' % row['merge_from_user_id'],
                     ],
                 )
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {"log_id": row['merge_from_user_id'],
                         'error': traceback.format_exc()}
@@ -552,7 +498,8 @@ The SQL must return a column named `user_id`. Userfield Value is optional -- inc
     userfield_name = forms.CharField(label="Userfield Name", required=True)
     userfield_value = forms.CharField(label="Userfield Value", required=False)
     action_page = forms.CharField(label="Page Names to Act On", required=False)
-
+    split_on_character = forms.CharField(label="Split on", required=False)
+    
     def run(self, task, rows):
         userfield_value = self.cleaned_data.get("userfield_value").strip() or None
         userfield_name = self.cleaned_data['userfield_name']
@@ -587,10 +534,19 @@ The SQL must return a column named `user_id`. Userfield Value is optional -- inc
 
             try:
                 if page is None:
-                    resp = ak.User.save({
-                            "id": row['user_id'],
-                            userfield_name: (userfield_value or
-                                             row['userfield_value'])})
+                    obj = {
+                        "id": row['user_id'],
+                        userfield_name: (userfield_value or
+                                         row['userfield_value'])
+                    }
+                    split_char = self.cleaned_data.get("split_on_character")
+                    if split_char is not None \
+                       and split_char in obj[userfield_name]:
+                        obj[userfield_name] = [
+                            i.strip() for i in obj[userfield_name].split(split_char)
+                        ]
+                    task_log.activity_log(task, obj)
+                    resp = ak.User.save(obj)
                 elif action is None:
                     resp = ak.act({
                             "id": row['user_id'],
@@ -613,7 +569,7 @@ The SQL must return a column named `user_id`. Userfield Value is optional -- inc
 
                 resp['log_id'] = row['user_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['user_id']
@@ -668,7 +624,7 @@ The SQL must return a column named `actionfield_id`. New Actionfield Name is opt
                 resp = rest.actionfield.put(actionfield.id, **data)
                 resp['log_id'] = row['actionfield_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['actionfield_id']
@@ -739,7 +695,7 @@ and a column named `json_primary_key`.
                 field['value'] = new
                 resp = endpoint.put(**field)
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(
                     task, {
@@ -804,7 +760,7 @@ old values, etc)
             try:
                 task_log.sql_log(task, row)
                 resp = self.run_one(task, row, task_log)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['action_id']
@@ -867,10 +823,116 @@ All columns apart from action_id and new_data_* will be ignored by the job code
                 }
                 resp['log_id'] = row['action_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['action_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+class OrderModificationForm(BatchForm):
+    help_text = """
+The SQL must return a column named `order_id`
+
+All columns with prefix `new_data_` will be treated as new values
+for the core_order attributes.  For example, `select id as order_id, 
+"failed" as new_data_status from core_order where id in (100,101);` 
+would cause two order records to be marked as cancelled.
+
+All columns apart from order_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("order_id") and int(row['order_id'])
+            
+            new_values = {"id": row['order_id']}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = getattr(rest, "order").patch(id=row['order_id'], **new_values)
+                resp = {
+                    'patch_response': resp
+                }
+                resp['log_id'] = row['order_id']
+                task_log.success_log(task, resp)
+            except Exception as e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['order_id']
+                resp['error'] = traceback.format_exc()
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+
+        return n_rows, n_success, n_error
+
+class TransactionModificationForm(BatchForm):
+    help_text = """
+The SQL must return a column named `transaction_id`
+
+All columns with prefix `new_data_` will be treated as new values
+for the core_transaction attributes.  For example, `select id as order_id, 
+"failed" as new_data_status from core_transaction where id in (100,101);` 
+would cause two transaction records to be marked as cancelled.
+
+All columns apart from transaction_id and new_data_* will be ignored by the job code
+(but can be used to review records for accuracy, log old values, etc)
+"""
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        task_log = get_task_log()
+
+        n_rows = n_success = n_error = 0
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            assert row.get("transaction_id") and int(row['transaction_id'])
+            
+            new_values = {"id": row['transaction_id']}
+            for key in row:
+                if not key.startswith("new_data_"):
+                    continue
+                else:
+                    new_values[key.replace("new_data_", "", 1)] = row[key]
+
+            task_log.activity_log(task, new_values)
+            new_values.pop("id")
+            try:
+                resp = getattr(rest, "transaction").patch(id=row['transaction_id'], **new_values)
+                resp = {
+                    'patch_response': resp
+                }
+                resp['log_id'] = row['transaction_id']
+                task_log.success_log(task, resp)
+            except Exception as e:
+                n_error += 1
+                resp = {}
+                resp['log_id'] = row['transaction_id']
                 resp['error'] = traceback.format_exc()
                 task_log.error_log(task, resp)
             else:
@@ -901,7 +963,7 @@ class PageCustomFieldJSONForm(BatchForm):
                 previous = current = current.get(field_name)
                 try:
                     current = json.loads(current)
-                except (TypeError, ValueError), e:
+                except (TypeError, ValueError) as e:
                     previous = '{}'
                     current = {}
                     
@@ -920,7 +982,7 @@ class PageCustomFieldJSONForm(BatchForm):
                 }
                 resp['log_id'] = row['page_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['page_id']
@@ -965,7 +1027,7 @@ class PageCreationForm(BatchForm):
         task_log.activity_log(task, {"page": page_values})
         try:
             page_id = id = page_endpoint.create(**page_values)
-        except Exception, e:
+        except Exception as e:
             task_log.error_log(
                 task, {"request": page_values, "error": str(e)})
             return False
@@ -977,7 +1039,7 @@ class PageCreationForm(BatchForm):
                 row['page_type'].lower(), id)
             try:
                 form_id = id = form_endpoint.create(**form_values)
-            except Exception, e:
+            except Exception as e:
                 task_log.error_log(
                     task, {"request": form_values, "error": str(e)})
                 return False
@@ -988,7 +1050,7 @@ class PageCreationForm(BatchForm):
                 row['page_type'].lower(), page_id)
             try:
                 followup_id = rest.pagefollowup.create(**followup_values)
-            except Exception, e:
+            except Exception as e:
                 task_log.error_log(
                     task, {"request": followup_values, "error": str(e)})
                 return False
@@ -1021,7 +1083,7 @@ class PageCreationForm(BatchForm):
                     n_error += 1
 
         return n_rows, n_success, n_error
-
+    
 class PageModificationForm(BatchForm):
     help_text = """
 The SQL must return columns named `page_id` and `page_type`
@@ -1065,7 +1127,29 @@ All columns apart from page_id and new_data_* will be ignored by the job code
             setattr(self, '_cached_find_tag', fields)
 
         return fields[str(tag_uuid)]
-    
+
+    def urlscrape(self, command):
+        url, command = command.split('#', 1)
+        command = parse_qs(command)
+        resp = requests.get(
+            url, headers={
+                "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36'}
+        )
+        content = lxml.html.fromstring(resp.text)
+        content = content.cssselect(command['selector'][0])[0]
+
+        if 'removeClass' in command:
+            eligible = content.cssselect('.' + command['removeClass'][0])
+            for el in eligible:
+                el.classes.discard(command['removeClass'][0])
+
+        if 'append' in command and 'appendAfter' in command:
+            el = content.cssselect(command['appendAfter'][0])[-1]
+            el.addnext(ET.XML(command['append'][0]))
+
+        content = lxml.html.tostring(content)
+        return content.decode("utf-8")
+
     def run(self, task, rows):
         rest = RestClient()
         rest.safety_net = False
@@ -1105,7 +1189,7 @@ All columns apart from page_id and new_data_* will be ignored by the job code
                             int(self.find_tag(k))
                             for k in row[key].split(",")
                         ]
-                    except KeyError, e:
+                    except KeyError as e:
                         task_log.error_log(task, {
                             "row": row,
                             "message": "Could not find tag",
@@ -1114,13 +1198,17 @@ All columns apart from page_id and new_data_* will be ignored by the job code
                         continue                        
                 elif key == "new_data_page_tags":
                     new_values['tags'] = [int(k) for k in row[key].split(",")]
+                elif key.startswith("new_data_urlscrape_page_"):
+                    new_values['fields'][key.replace("new_data_urlscrape_page_", "", 1)] = self.urlscrape(row[key])
                 elif key.startswith("new_data_page_"):
                     new_values['fields'][key.replace("new_data_page_", "", 1)] = row[key]
+                elif key.startswith("new_data_urlscrape_"):
+                    new_values[key.replace("new_data_urlscrape_", "", 1)] = self.urlscrape(row[key])
                 else:
                     new_values[key.replace("new_data_", "", 1)] = row[key]
             if not new_values['fields']: new_values.pop("fields")
             if not new_values['tags']: new_values.pop('tags')
-            
+
             task_log.activity_log(task, new_values)
             new_values.pop("id")
             try:
@@ -1130,7 +1218,7 @@ All columns apart from page_id and new_data_* will be ignored by the job code
                 }
                 resp['log_id'] = row['page_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['page_id']
@@ -1189,7 +1277,7 @@ All columns apart from signup_id and new_data_* will be ignored by the job code
                 }
                 resp['log_id'] = row['signup_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['signup_id']
@@ -1273,7 +1361,7 @@ All columns apart from event_id and new_data_* will be ignored by the job code
                     resp['custom_fields_response'] = resp2
                 resp['log_id'] = row['event_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['event_id']
@@ -1288,8 +1376,8 @@ All columns apart from event_id and new_data_* will be ignored by the job code
 class EventHtmlEntitiesForm(BatchForm):
 
     def cleanupString(self, string):
-        string = urllib2.unquote(string).decode('utf8')
-        return HTMLParser.HTMLParser().unescape(string).encode('utf8')
+        string = unquote(string).decode('utf8')
+        return HTMLParser().unescape(string).encode('utf8')
 
     def run(self, task, rows):
         rest = RestClient()
@@ -1318,7 +1406,7 @@ class EventHtmlEntitiesForm(BatchForm):
                 }
                 resp['log_id'] = row['event_id']
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['event_id']
@@ -1394,7 +1482,7 @@ All columns apart from user_id and new_data_* will be ignored by the job code
                     tracking_resp = api.act(data)
                     resp['tracking_action'] = tracking_resp
                 task_log.success_log(task, resp)
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['user_id']
@@ -1485,7 +1573,7 @@ each user is marked as acting on.</p>
                 resp = ak.act(action)
                 resp['log_id'] = row['user_id'] if user_id else row['email']
                 assert resp['status']
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = row['user_id'] if user_id else row['email']

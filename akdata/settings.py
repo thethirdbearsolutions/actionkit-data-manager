@@ -72,14 +72,14 @@ STATICFILES_FINDERS = (
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 DEFAULT_FROM_EMAIL = os.environ['DEFAULT_FROM_EMAIL']
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
-    'djangohelpers.middleware.AuthRequirementMiddleware',
+    #'djangohelpers.middleware.AuthRequirementMiddleware',
 )
 
 ANONYMOUS_PATHS = ['/static/', '/admin/', '/accounts/']
@@ -121,7 +121,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django.contrib.admin',
     'debug_toolbar',
-    'djangohelpers',
+    #'djangohelpers',
     'djcelery',
     'localflavor',
     'actionkit',

@@ -154,7 +154,7 @@ Note that the order of the rows returned matters a lot.  I cannot stress this en
                                 "id": accumulator[0],
                                 userfield_name: json.dumps(list(accumulator[1])),
                                 })
-                    except Exception, e:
+                    except Exception as e:
                         n_error += 1
                         resp = {}
                         resp['log_id'] = accumulator[0]
@@ -181,7 +181,7 @@ Note that the order of the rows returned matters a lot.  I cannot stress this en
                         "id": accumulator[0],
                         userfield_name: json.dumps(list(accumulator[1])),
                         })
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 resp = {}
                 resp['log_id'] = accumulator[0]

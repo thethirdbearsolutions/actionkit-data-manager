@@ -57,7 +57,7 @@ class MailchimpRemoveSubscriberTagForm(MailchimpBaseForm):
                     obj
                 )
                 assert resp.status_code == 204
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "row": obj,
@@ -99,7 +99,7 @@ class MailchimpAddSubscriberTagForm(MailchimpBaseForm):
                     obj
                 )
                 assert resp.status_code == 200
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "row": obj,
@@ -151,7 +151,7 @@ class MailchimpAddSubscriberForm(MailchimpBaseForm):
                     obj
                 )
                 assert resp.status_code == 200
-            except Exception, e:
+            except Exception as e:
                 n_error += 1
                 task_log.error_log(task, {
                     "row": obj,

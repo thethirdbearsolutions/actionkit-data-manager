@@ -13,6 +13,7 @@ import apiclient.errors
 from apiclient.http import MediaFileUpload
 import boto3
 from googleapiclient.errors import HttpError
+import gdata.spreadsheet.service
 
 class MissingFileError(Exception):
     def __init__(self, url, resp=None):
@@ -45,6 +46,88 @@ def get_md5_gdrive(id, api):
         fileId=id, fields='md5Checksum',
     ).execute()
     return file['md5Checksum']
+
+class ActionkitSpreadsheetForm(BatchForm):
+
+    exclude = forms.CharField(label="Comma separated list of IDs to exclude (0 for auto appends, n/a to disable this feature)", required=True)
+    google_client_id = forms.CharField(label="Client ID", required=True)
+    google_client_secret = forms.CharField(label="Client secret", required=True)
+    google_refresh_token = forms.CharField(label="Refresh token", required=True)
+    google_spreadsheet_id = forms.CharField(label="Spreadsheet ID", required=True)
+    google_worksheet_id = forms.CharField(label="Worksheet ID", required=True)
+
+    primary_key = forms.CharField(label="Name of column to dedupe against (default: primary_key)", required=False)
+    
+    def run(self, task, rows):
+        task_log = get_task_log()
+
+        resp = requests.post("https://accounts.google.com/o/oauth2/token", data={
+            "grant_type": "refresh_token",
+            "refresh_token": self.cleaned_data['google_refresh_token'],
+            "client_id": self.cleaned_data['google_client_id'],
+            "client_secret": self.cleaned_data['google_client_secret']})
+        token = resp.json()['access_token']
+        spr_client = gdata.spreadsheet.service.SpreadsheetsService(additional_headers={"Authorization": "Bearer %s" % token})
+
+        if self.cleaned_data['exclude'] == 'n/a':
+            exclude = []
+        else:
+            exclude = self.cleaned_data['exclude'].split(",")
+        n_errors = n_rows = n_success = 0
+
+        feed = spr_client.GetCellsFeed(self.cleaned_data['google_spreadsheet_id'], self.cleaned_data['google_worksheet_id'])
+        existing = []
+
+        cols = []
+        for row in feed.entry:
+            if int(row.cell.row) > 1:
+                break
+            cols.append(row.cell.text.lower().replace("_", ""))
+
+        current_row = 2
+        obj = {}
+        for row in feed.entry:
+            if int(row.cell.row) < current_row:
+                continue
+            if int(row.cell.row) > current_row:
+                existing.append(obj)
+                obj = {}
+                current_row = int(row.cell.row)
+            obj[ cols[int(row.cell.col) - 1] ] = row.cell.text
+        existing.append(obj)
+
+        primary_key = self.cleaned_data.get("primary_key") or "primary_key"
+        existing_keys = [i[primary_key] for i in existing if primary_key in i]
+        
+        for row in rows:
+
+            n_rows += 1
+            obj = {}
+            for key, val in row.items():
+                obj[key.lower().replace("_", "")] = unicode(val)
+
+            id = obj.get(primary_key.lower().replace("_", "")) if primary_key else None
+            if id and id in exclude:
+                continue
+            elif id and id in existing_keys:
+                continue
+            
+            try:
+                spr_client.InsertRow(obj, 
+                                     self.cleaned_data['google_spreadsheet_id'], 
+                                     self.cleaned_data['google_worksheet_id'])
+            except Exception as e:
+                n_errors += 1
+                task_log.error_log(task, {"row": obj, "error": str(e)})
+            else:
+                n_success += 1
+                exclude.append(id)
+        if self.cleaned_data['exclude'] != 'n/a':
+            exclude = ','.join([str(i) for i in exclude])
+            task.form_data = json.dumps({"exclude": exclude})
+        task.save()
+
+        return n_rows, n_success, n_errors
 
 class DeleteMigratedFileFromS3Form(BatchForm):
 
@@ -205,12 +288,12 @@ class CopyS3FilesToDriveForm(BatchForm):
             n_rows += 1
             try:
                 self.maybe_download(row['s3_url'], row['local_dir'])
-            except MissingFileError, e:
+            except MissingFileError as e:
                 filename = os.path.basename(row['s3_url'])
                 filepath = os.path.join(row['local_dir'], filename)
                 try:
                     get_md5_local(filepath)
-                except MissingFileError, f:
+                except MissingFileError as f:
                     n_error += 1
                     task_log.error_log(task, {"row": row,
                                               "error": "s3_file_missing",
@@ -230,13 +313,13 @@ class CopyS3FilesToDriveForm(BatchForm):
                 googleInfo = self.maybe_upload(api, row['s3_url'],
                                                row['local_dir'],
                                                row['gdrive_folder'])
-            except AssertionError, e:
+            except AssertionError as e:
                 n_error += 1
                 task_log.error_log(task, {"row": row,
                                           "error": "cannot_find_folder",
                                           "resp": e.message})
                 continue
-            except HttpError, e:
+            except HttpError as e:
                 n_error += 1
                 task_log.error_log(task, {"row": row,
                                           "error": "unknown_error",
@@ -261,7 +344,7 @@ class CopyS3FilesToDriveForm(BatchForm):
                             value=fields[key],
                         )
                     }
-                except Exception, e:
+                except Exception as e:
                     resp[key] = str(e)
             task_log.success_log(task, {"row": row, "resp": resp})
             n_success += 1
@@ -303,8 +386,8 @@ class CopyS3FilesToDriveForm(BatchForm):
             try:
                 status, response = file.next_chunk()
                 if status:
-                    print "Uploaded %d%%." % int(status.progress() * 100)
-            except apiclient.errors.HttpError, e:
+                    print("Uploaded %d%%." % int(status.progress() * 100))
+            except apiclient.errors.HttpError as e:
                 if e.resp.status in [404]:
                     # Start the upload all over again.
                     return self.actually_upload(file_name, filepath) 
@@ -329,7 +412,7 @@ class CopyS3FilesToDriveForm(BatchForm):
         remote_md5 = get_md5_s3(url)
         try:
             local_md5 = get_md5_local(filepath)
-        except MissingFileError, e:
+        except MissingFileError as e:
             local_md5 = None
 
         if remote_md5 == local_md5:

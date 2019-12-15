@@ -1,5 +1,6 @@
-from django.db import models
 from django.db import connections
+from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 from djcelery.models import TaskState
 import decimal
@@ -8,12 +9,12 @@ from main import task_registry
 from actionkit.rest import run_query
 
 class LogEntry(models.Model):
-    task = models.ForeignKey('main.JobTask')
+    task = models.ForeignKey('main.JobTask', on_delete=models.CASCADE)
     type = models.CharField(max_length=10)
     data = models.TextField(null=True, blank=True)
 
 class BatchJob(models.Model):
-    created_by = models.ForeignKey('auth.User')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True)
     created_on = models.DateTimeField(auto_now_add=True)
     sql = models.TextField()
     form_data = models.TextField(default="{}")
@@ -28,11 +29,11 @@ class BatchJob(models.Model):
 
     database = models.CharField(default='ak', max_length=255)
 
-    def __unicode__(self):
+    def __str__(self):
         if self.title:
             return "%s: %s" % (self.id, self.title)
         else:
-            return u"%s: A %s created by %s on %s" % (self.id, self.type, self.created_by, self.created_on)
+            return "%s: A %s created by %s on %s" % (self.id, self.type, self.created_by, self.created_on)
 
     TYPE_CHOICES = [
         (task.slug, task.description) for task in task_registry.tasks.values() #@@TODO
@@ -76,7 +77,7 @@ class BatchJob(models.Model):
             row = cursor.fetchone()
 
 class RecurringTask(models.Model):
-    parent_job = models.ForeignKey(BatchJob)
+    parent_job = models.ForeignKey(BatchJob, on_delete=models.CASCADE)
     period = models.IntegerField()
     TIME_CHOICES = (
         ("minutes", "minutes"),
@@ -94,8 +95,8 @@ class RecurringTask(models.Model):
     def current_time(self):
         return timezone.now()
 
-    def __unicode__(self):
-        return u"Every %s %s: %s" % (self.period, self.period_unit, unicode(self.parent_job))
+    def __str__(self):
+        return "Every %s %s: %s" % (self.period, self.period_unit, str(self.parent_job))
 
     def reset(self):
         self.is_running = False
@@ -123,9 +124,9 @@ class RecurringTaskConflict(models.Model):
     description = models.TextField()
 
 class JobTask(models.Model):
-    parent_job = models.ForeignKey(BatchJob, null=True, blank=True)
+    parent_job = models.ForeignKey(BatchJob, null=True, blank=True, on_delete=models.CASCADE)
     parent_recurring_task = models.ForeignKey(RecurringTask,
-                                              null=True, blank=True)
+                                              null=True, blank=True, on_delete=models.CASCADE)
 
     created_on = models.DateTimeField(auto_now_add=True)
     completed_on = models.DateTimeField(null=True, blank=True)
@@ -139,13 +140,13 @@ class JobTask(models.Model):
     def current_time(self):
         return timezone.now()
         
-    def __unicode__(self):
+    def __str__(self):
         job = self.parent_job
         task = self.parent_recurring_task
         if task is not None:
             job = task.parent_job
 
-        return "(job:%s) task:%s" % (unicode(job), self.id)
+        return "(job:%s) task:%s" % (str(job), self.id)
 
 from django.contrib import admin
 from djangohelpers.lib import register_admin
@@ -164,6 +165,7 @@ class RecurringTaskAdmin(admin.ModelAdmin):
 admin.site.register(RecurringTask, RecurringTaskAdmin)
 
 from django.contrib import admin
+from django.utils.safestring import mark_safe
 
 class HasResultsListFilter(admin.SimpleListFilter):
     title = "num rows"
@@ -185,13 +187,11 @@ class HasResultsListFilter(admin.SimpleListFilter):
 class JobTaskAdmin(admin.ModelAdmin):
 
     def get_logs_url(self, obj):
-        return "<a href='/logs/%s'>%s</a>" % (obj.id, 'logs')
-    get_logs_url.allow_tags = True
+        return mark_safe("<a href='/logs/%s'>%s</a>" % (obj.id, 'logs'))
 
     def get_parent_recurring_task(self, obj):
         if obj.parent_recurring_task_id:
-            return "<a href='/admin/main/recurringtask/%s/'>%s</a>" % (obj.parent_recurring_task_id, obj.parent_recurring_task)
-    get_parent_recurring_task.allow_tags = True
+            return mark_safe("<a href='/admin/main/recurringtask/%s/'>%s</a>" % (obj.parent_recurring_task_id, obj.parent_recurring_task))
     
     list_display = ['id', 'get_logs_url',
                     'parent_job', 'get_parent_recurring_task',
@@ -220,6 +220,5 @@ class TaskBatch(models.Model):
         tasks = self.tasks.split(",")
         return TaskState.objects.using("celerytasks").filter(task_id__in=tasks)
 
-    @models.permalink
     def get_absolute_url(self):
-        return ("batch", [self.id])
+        return reverse("batch", [self.id])
