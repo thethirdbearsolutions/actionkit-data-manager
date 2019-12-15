@@ -39,6 +39,7 @@ idna
 ipaddress
 jmespath
 kombu
+lxml
 meld3
 mysqlclient
 ordereddict
