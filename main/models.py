@@ -91,6 +91,9 @@ class RecurringTask(models.Model):
     is_running = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
+    def type(self):
+        return self.parent_job.type
+
     def current_time(self):
         return timezone.now()
 
@@ -159,8 +162,9 @@ def admin_make_inactive(modeladmin, request, queryset):
     queryset.update(is_active=False)
 
 class RecurringTaskAdmin(admin.ModelAdmin):
-    list_display = [f.name for f in RecurringTask._meta.fields] + ['current_time']
+    list_display = [f.name for f in RecurringTask._meta.fields] + ['current_time', 'type']
     actions = [admin_list_export, admin_make_active, admin_make_inactive]
+    list_select_related = ['parent_job']
 admin.site.register(RecurringTask, RecurringTaskAdmin)
 
 from django.contrib import admin
