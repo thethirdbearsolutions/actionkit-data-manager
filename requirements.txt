@@ -1,3 +1,7 @@
+django-two-factor-auth
+django_otp
+phonenumbers
+twilio
 amqp
 amqplib
 anyjson

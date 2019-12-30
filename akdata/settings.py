@@ -72,15 +72,34 @@ STATICFILES_FINDERS = (
 SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 DEFAULT_FROM_EMAIL = os.environ['DEFAULT_FROM_EMAIL']
 
-MIDDLEWARE = (
+ENFORCE_TWO_FACTOR = os.environ.get("ENFORCE_TWO_FACTOR") == "1"
+
+MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+]
+
+if ENFORCE_TWO_FACTOR:
+    MIDDLEWARE += [
+        'django_otp.middleware.OTPMiddleware',
+        'two_factor.middleware.threadlocals.ThreadLocals',
+    ]
+    
+MIDDLEWARE += [
     'django.contrib.messages.middleware.MessageMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     #'djangohelpers.middleware.AuthRequirementMiddleware',
-)
+]
+
+
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_CALLER_ID = os.environ.get('TWILIO_CALLER_ID')
+
+TWO_FACTOR_SMS_GATEWAY = 'two_factor.gateways.twilio.gateway.Twilio'
+TWO_FACTOR_CALL_GATEWAY = 'two_factor.gateways.twilio.gateway.Twilio'
 
 ANONYMOUS_PATHS = ['/static/', '/admin/', '/accounts/']
 
@@ -124,6 +143,17 @@ INSTALLED_APPS = [
     #'djangohelpers',
     'djcelery',
     'localflavor',
+]
+
+if ENFORCE_TWO_FACTOR:
+    INSTALLED_APPS += [
+        'django_otp',
+        'django_otp.plugins.otp_static',
+        'django_otp.plugins.otp_totp',
+        'two_factor',
+    ]
+
+INSTALLED_APPS += [
     'actionkit',
     'basic_tasks',
     'main',
@@ -168,7 +198,11 @@ ACTIONKIT_API_HOST = os.environ['ACTIONKIT_API_HOST']
 ACTIONKIT_API_USER = os.environ['ACTIONKIT_API_USER']
 ACTIONKIT_API_PASSWORD = os.environ['ACTIONKIT_API_PASSWORD']
 
-LOGIN_URL = '/admin/login/'
+if ENFORCE_TWO_FACTOR:
+    LOGIN_URL = 'two_factor:login'
+else:
+    LOGIN_URL = '/account/login/'
+LOGIN_REDIRECT_URL = '/'
 
 import importlib
 for app_name in TASKMAN_PLUGIN_PACKAGES:

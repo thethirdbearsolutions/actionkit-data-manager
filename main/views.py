@@ -16,12 +16,13 @@ from django.db import connections
 from main.forms import RecurringForm
 from main.tasks import run_batch_job
 from main.models import BatchJob, JobTask, LogEntry
-
+from main.utils import enforce_2fa_setup
 
 import csv
 import json
 import io
 
+@enforce_2fa_setup
 @allow_http("GET")
 @rendered_with("main/logs_index.html")
 def get_logs_index(request, id):
@@ -36,6 +37,7 @@ def get_logs_index(request, id):
     
     return {"task": task, "types": types}
 
+@enforce_2fa_setup
 def get_logs(request, id, type):
     logs = LogEntry.objects.filter(task__id=id, type=type)
     if 'filter' in request.GET:
@@ -44,6 +46,7 @@ def get_logs(request, id, type):
         [json.loads(i.data) for i in logs],
         indent=2), content_type="application/json")
 
+@enforce_2fa_setup
 @allow_http("GET", "POST")
 @rendered_with("main/schedule.html")
 def schedule(request, id):
@@ -63,10 +66,12 @@ def schedule(request, id):
     return {"form": form, "job": job, "already": already}
 
 
+@enforce_2fa_setup
 @rendered_with("main/job_results.html")
 def job_results(request, result):
     return {"result": result}
 
+@enforce_2fa_setup
 @allow_http("GET", "POST")
 @rendered_with("main/batch_job.html")
 def batch_job(request, type):
@@ -130,6 +135,7 @@ def batch_job(request, type):
 from main import task_registry
 from django.contrib.flatpages.models import FlatPage
 
+@enforce_2fa_setup
 @allow_http("GET", "POST")
 @rendered_with("main/home.html")
 def home(request):
