@@ -17,7 +17,7 @@ chardet
 cryptography
 dj-database-url
 Django
-django-actionkit-client
+django-actionkit-client>=0.19.1
 django-appconf
 django-celery
 django-dbtemplates
@@ -31,7 +31,7 @@ django-picklefield
 djangohelpers==0.19
 docutils
 enum34
-gdata
+gdata-python3
 gevent
 google-api-python-client
 google-auth

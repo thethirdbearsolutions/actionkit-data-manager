@@ -5,7 +5,10 @@ from googleapiclient.discovery import build
 import requests
 import re
 import os.path
-import urllib
+try:
+    from urllib.parse import unquote as url_unquote
+except:
+    from urllib import unquote as url_unquote
 import hashlib
 
 from actionkit.rest import client as RestClient
@@ -195,7 +198,7 @@ class DeleteMigratedFileFromS3Form(BatchForm):
                 "^https://([A-Za-z0-9\-]+).s3.amazonaws.com/(.*)$",
                 row['s3_url'],
             ).groups()
-            key = urllib.unquote(key)
+            key = url_unquote(key)
 
             s3_resp = s3.Object(bucket, key).delete()
             ak_resp = rest.actionfield.delete(row['s3url_field_id'])
@@ -234,7 +237,7 @@ class AddSharedFolderToDriveForm(BatchForm):
             q = ("(name='%s' or name='%s') "
                  "and mimeType='application/vnd.google-apps.folder' "
                  "and sharedWithMe " % (row['gdrive_folder'],
-                                        urllib.unquote(row['gdrive_folder'])))
+                                        url_unquote(row['gdrive_folder'])))
             folder = api.files().list(q=q, fields="files(id)",).execute()
 
             if len(folder['files']) != 1:
@@ -332,6 +335,7 @@ class CopyS3FilesToDriveForm(BatchForm):
             }
             parent = '/rest/v1/%saction/%s/' % (row['action_type'], row['action_id'])
             resp = {}
+            errored = False
             for key in fields:
                 if fields[key] is None:
                     continue
@@ -346,8 +350,13 @@ class CopyS3FilesToDriveForm(BatchForm):
                     }
                 except Exception as e:
                     resp[key] = str(e)
-            task_log.success_log(task, {"row": row, "resp": resp})
-            n_success += 1
+                    errored = True
+            if errored:
+                task_log.error_log(task, {"row": row, "resp": resp})
+                n_error += 1
+            else:
+                task_log.success_log(task, {"row": row, "resp": resp})
+                n_success += 1
         return n_rows, n_success, n_error        
             
     def maybe_upload(self, api, url, directory, folder_name):
@@ -366,7 +375,8 @@ class CopyS3FilesToDriveForm(BatchForm):
         folder_id = folder['files'][0]['id']
         
         files = api.files().list(
-            q="'%s' in parents and (name='%s' or name='%s')" % (folder_id, filename.replace("'", "\\'"), urllib.unquote(filename).replace("'", "\\'")),
+            q="'%s' in parents and (name='%s' or name='%s')" % (folder_id, filename.replace("'", "\\'"),
+                                                                url_unquote(filename).replace("'", "\\'")),
             fields="files(id,name,md5Checksum,webContentLink)",
         ).execute()
         for file in files['files']:
@@ -377,7 +387,7 @@ class CopyS3FilesToDriveForm(BatchForm):
         return result
 
     def actually_upload(self, api, file_name, filepath, folder_id):
-        body = {'name': urllib.unquote(file_name), 'parents': [folder_id]}
+        body = {'name': url_unquote(file_name), 'parents': [folder_id]}
         #'mimeType': 'application/vnd.google-apps.document'}
         media = MediaFileUpload(filepath, resumable=True)
         file = api.files().create(body=body, media_body=media)

@@ -1,10 +1,10 @@
 from main.task_registry import register_task
-#from basic_tasks.google_tasks import (
-#    CopyS3FilesToDriveForm,
-#    AddSharedFolderToDriveForm,
-#    DeleteMigratedFileFromS3Form,
-#    ActionkitSpreadsheetForm
-#)
+from basic_tasks.google_tasks import (
+    CopyS3FilesToDriveForm,
+    AddSharedFolderToDriveForm,
+    DeleteMigratedFileFromS3Form,
+    ActionkitSpreadsheetForm
+)
 from basic_tasks.forms import (
     UnsubscribeAndActJobForm,
     TagSyncForm,
@@ -49,7 +49,7 @@ register_task("UserMergeJob", "Merge users", UserMergeForm)
 #             DeleteMigratedFileFromS3Form)
 #register_task("AddSharedFolderToDriveJob", "Add shared folders to drive",
 #              AddSharedFolderToDriveForm)
-#register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
+register_task("CopyS3FilesToDriveJob", "Copy s3 to drive", CopyS3FilesToDriveForm)
 register_task("UserfieldJob", 
               "Apply Userfield to Batch", UserfieldJobForm)
 register_task("CustomFieldJSONJob", 
