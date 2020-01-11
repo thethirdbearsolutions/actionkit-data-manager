@@ -6,6 +6,7 @@ from djcelery.models import TaskState
 import decimal
 
 from main import task_registry
+from main.querysets import RecurringTaskQueryset
 from actionkit.rest import run_query
 
 class LogEntry(models.Model):
@@ -37,10 +38,10 @@ class BatchJob(models.Model):
 
     TYPE_CHOICES = [
         (task.slug, task.description) for task in task_registry.tasks.values() #@@TODO
-        ]
+    ]
 
     type = models.CharField(max_length=255, choices=TYPE_CHOICES)
-
+    
     @property
     def form_factory(self):
         return task_registry.get_task(self.type).form_class
@@ -77,6 +78,9 @@ class BatchJob(models.Model):
             row = cursor.fetchone()
 
 class RecurringTask(models.Model):
+
+    objects = RecurringTaskQueryset.as_manager()
+    
     parent_job = models.ForeignKey(BatchJob, on_delete=models.CASCADE)
     period = models.IntegerField()
     TIME_CHOICES = (
@@ -152,6 +156,8 @@ from django.contrib import admin
 from djangohelpers.lib import register_admin
 
 from djangohelpers.export_action import admin_list_export
+from django.utils.timesince import timesince
+
 register_admin(BatchJob)
 
 def admin_make_active(modeladmin, request, queryset):
@@ -160,8 +166,51 @@ def admin_make_inactive(modeladmin, request, queryset):
     queryset.update(is_active=False)
 
 class RecurringTaskAdmin(admin.ModelAdmin):
-    list_display = [f.name for f in RecurringTask._meta.fields] + ['current_time']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).add_latest_stats()
+    
+    def get_parent_job(self, obj):
+        if obj.parent_job_id:
+            return mark_safe("<a href='/admin/main/batchjob/%s/'>%s</a>" % (
+                obj.parent_job_id, obj.parent_job
+            ))
+
+    def frequency(self, obj):
+        return "%s %s" % (obj.period, obj.period_unit)
+
+    def last_started_ago(self, obj):
+        return '%s ago' % timesince(obj.last_started_on)
+
+    def type(self, obj):
+        return obj.parent_job.type
+
+    def latest_nonzero(self, obj):
+        return mark_safe(
+            '<a href="/admin/main/jobtask/?id=%s">%s ago: %s rows (%s success; %s error)</a>' % (
+                obj.latest_nonzero_id,
+                timesince(obj.latest_nonzero_completed_on),
+                obj.latest_nonzero_num_rows,
+                obj.latest_nonzero_success_count,
+                obj.latest_nonzero_error_count,
+            )
+        )
+
+    list_display = [
+        'id', 'get_parent_job', 'type',
+        'frequency', 'last_started_ago',
+        'latest_nonzero',
+        'is_active', 'is_running',
+    ]
+
     actions = [admin_list_export, admin_make_active, admin_make_inactive]
+    list_select_related = ['parent_job']
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return ['parent_job']
+        return []
+
 admin.site.register(RecurringTask, RecurringTaskAdmin)
 
 from django.contrib import admin
@@ -198,7 +247,7 @@ class JobTaskAdmin(admin.ModelAdmin):
                     'created_on', 'completed_on', 'current_time',
                     'num_rows', 'success_count', 'error_count', 'form_data']
     list_filter = [HasResultsListFilter, 'parent_recurring_task', 'parent_job']
-
+    list_select_related = ['parent_recurring_task', 'parent_job']
     
 admin.site.register(JobTask, JobTaskAdmin)
 

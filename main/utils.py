@@ -25,5 +25,6 @@ def flush_old_tasks(days_ago=30):
     jobs = JobTask.objects.filter(
         created_on__lte=one_month_ago
     )
-    print('Deleting %s jobs' % jobs.count())
+
+    print('Deleting %s jobs' % (jobs.count()))
     jobs.delete()
