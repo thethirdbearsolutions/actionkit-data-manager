@@ -30,7 +30,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='batchjob',
             name='run_via',
-            field=models.CharField(choices=[('client-db', 'client-db'), ('api', 'api')], default='client-db', max_length=10),
+            field=models.CharField(choices=[('client-db', 'client-db'), ('api', 'api')], default='client-db', max_length=50),
         ),
         migrations.AlterField(
             model_name='recurringtask',
