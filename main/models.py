@@ -194,7 +194,7 @@ class RecurringTaskAdmin(admin.ModelAdmin):
                 obj.latest_nonzero_success_count,
                 obj.latest_nonzero_error_count,
             )
-        )
+        ) if obj.latest_nonzero_id else ''
 
     list_display = [
         'id', 'get_parent_job', 'type',
