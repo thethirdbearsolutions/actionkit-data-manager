@@ -17,7 +17,7 @@ chardet
 cryptography
 dj-database-url
 Django
-django-actionkit-client>=0.19.1
+django-actionkit-client>=0.20
 django-appconf
 django-celery
 django-dbtemplates
