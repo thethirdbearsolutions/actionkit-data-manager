@@ -40,7 +40,7 @@ class BatchJob(models.Model):
         (task.slug, task.description) for task in task_registry.tasks.values() #@@TODO
     ]
 
-    type = models.CharField(max_length=255, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=255)
     
     @property
     def form_factory(self):

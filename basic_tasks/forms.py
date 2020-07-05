@@ -16,6 +16,7 @@ import lxml.etree as ET
 
 from actionkit import Client
 from actionkit.rest import client as RestClient
+from actionkit.rest import run_query
 from actionkit.models import (
     CoreAction, CoreActionField, QueryReport, CoreTag, CorePageField, CorePage
 )
@@ -375,29 +376,30 @@ class PublishReportResultsForm(BatchForm):
                     variable_mapping[key] = '"%s"' % variable_mapping[key]
             context = Context(variable_mapping)
             sql = Template(sql).render(context)
-        
+
         cursor = connections['ak'].cursor()
         cursor.execute(sql)
-
-        row = cursor.fetchone()
-        while row:
+        
+        results = run_query(sql)
+        for row in results:
             row = [float(i) if isinstance(i, decimal.Decimal) else i for i in row]
             yield dict(zip([i[0] for i in cursor.description], row))
-            row = cursor.fetchone()
 
     def run(self, task, rows):
         ak = Client()
-
+        rest = RestClient()
+        rest.safety_net = False
+        
         task_log = get_task_log()
 
-        if self.cleaned_data.get("report_id"):
+        if self.cleaned_data.get("report_id"):            
             report = QueryReport.objects.using("ak").get(report_ptr__id=self.cleaned_data['report_id'])
             rows = list(self.run_sql(report.sql))
         else:
             _rows = {}
             for row in rows:
-                report = QueryReport.objects.using("ak").get(report_ptr__id=row['report_id'])
-                result = list(self.run_sql(report.sql))
+                report = rest.queryreport.get(id=row['report_id'])
+                result = list(self.run_sql(report['sql']))
                 if (row.get("format") or "").startswith('json0['):
                     result = result[0]
                     result = result[row['format'].split("[")[1].split("]")[0]]
@@ -415,27 +417,6 @@ class PublishReportResultsForm(BatchForm):
         fp.write(data)
         fp.close()
 
-        if not os.path.exists("/tmp/%s.old" % self.cleaned_data['filename']):
-            subprocess.check_call([
-                "s3cmd", "put", "--acl-public",
-                "/tmp/%s" % self.cleaned_data['filename'],
-                "s3://%s/" % self.cleaned_data['bucket']
-            ])
-            return 1, 1, 0 
-
-        try:
-            subprocess.check_output([
-                "diff",
-                "/tmp/%s.old" % self.cleaned_data['filename'],
-                "/tmp/%s" % self.cleaned_data['filename'],
-            ])
-        except subprocess.CalledProcessError as e:
-            diff = e.output.splitlines()
-            task.form_data = json.dumps({"diff": e.output})
-            task.save()
-        else:
-            return 0, 0, 0
-
         try:
             cmd = [
                 "s3cmd", "put", "--acl-public",
@@ -450,7 +431,7 @@ class PublishReportResultsForm(BatchForm):
                 "error": str(e),
             })
             return 1, 0, 1
-        return 1, len(diff), 0
+        return 1, 1, 0
 
 class UserMergeForm(BatchForm):
     help_text = """

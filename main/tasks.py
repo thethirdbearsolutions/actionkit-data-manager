@@ -30,7 +30,7 @@ def run_batch_job(task_id, query_string):
     if job.run_via == 'api':
         rows = job.run_sql_api(form.get_data())
     else:
-        rows = job.run_sql(form.get_data())
+        rows = job.run_sql_api(form.get_data())
         
     name = job.title
     try:
