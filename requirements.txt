@@ -1,3 +1,4 @@
+vine
 django-two-factor-auth
 django_otp
 phonenumbers
