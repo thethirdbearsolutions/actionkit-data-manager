@@ -42,7 +42,7 @@ httplib2
 idna
 ipaddress
 jmespath
-kombu
+kombu==4.6.11
 lxml
 meld3
 mysqlclient
