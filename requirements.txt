@@ -1,4 +1,4 @@
-vine
+vine==1.3.0
 django-two-factor-auth
 django_otp
 phonenumbers
