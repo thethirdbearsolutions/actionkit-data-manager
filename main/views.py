@@ -111,15 +111,16 @@ def batch_job(request, type):
                 except StopIteration:
                     break
             preview = True
+            count = job.run_sql_count(form.get_data())
             return locals() 
         except Exception as err:
             rows = []
             return locals()
 
-
+    count = job.run_sql_count(form.get_data())
     job.save()
 
-    task = JobTask(parent_job=job)
+    task = JobTask(parent_job=job, expected_num_rows=count)
     task.save()
 
     if request.POST.get("submit") == "Run Now, Synchronously":

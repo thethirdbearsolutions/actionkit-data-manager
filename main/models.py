@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils import timezone
 from djcelery.models import TaskState
 import decimal
+import uuid
 
 from main import task_registry
 from main.querysets import RecurringTaskQueryset
@@ -36,11 +37,7 @@ class BatchJob(models.Model):
         else:
             return "%s: A %s created by %s on %s" % (self.id, self.type, self.created_by, self.created_on)
 
-    TYPE_CHOICES = [
-        (task.slug, task.description) for task in task_registry.tasks.values() #@@TODO
-    ]
-
-    type = models.CharField(max_length=255, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=255)
     
     @property
     def form_factory(self):
@@ -63,6 +60,20 @@ class BatchJob(models.Model):
         for row in results:
             row = [float(i) if isinstance(i, decimal.Decimal) else i for i in row]
             yield dict(zip([i[0] for i in cursor.description], row))
+
+    def run_sql_count(self, ctx={}):
+        cursor = connections[self.database].cursor()
+        sql = self.sql
+        if ctx and '{form[' in sql:
+            sql = sql.format(form=ctx)
+        sql = """
+        select count(*) from (
+        %s
+        ) count_subquery_%s
+        """ % (sql, uuid.uuid4().hex)
+        cursor.execute(sql)
+        row = cursor.fetchone()
+        return row[0]
         
     def run_sql(self, ctx={}):
         cursor = connections[self.database].cursor()
@@ -127,6 +138,13 @@ class RecurringTaskConflict(models.Model):
     recurring_tasks = models.ManyToManyField(RecurringTask)
     description = models.TextField()
 
+class DraftJob(models.Model):
+    type = models.CharField(max_length=255)
+    query_string = models.TextField()
+    name = models.CharField(max_length=255, default='', blank=True)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('auth.User', null=True, on_delete=models.SET_NULL)
+
 class JobTask(models.Model):
     parent_job = models.ForeignKey(BatchJob, null=True, blank=True, on_delete=models.CASCADE)
     parent_recurring_task = models.ForeignKey(RecurringTask,
@@ -135,6 +153,7 @@ class JobTask(models.Model):
     created_on = models.DateTimeField(auto_now_add=True)
     completed_on = models.DateTimeField(null=True, blank=True)
 
+    expected_num_rows = models.IntegerField(default=0)
     num_rows = models.IntegerField(default=0)
     success_count = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
@@ -235,6 +254,26 @@ class HasResultsListFilter(admin.SimpleListFilter):
     
 class JobTaskAdmin(admin.ModelAdmin):
 
+    def rows_logged(self, obj):
+        return obj._rows_logged
+
+    def rows_per_second(self, obj):
+        return '%.2f' % (1 / self.seconds_per_row(obj))
+    
+    def seconds_per_row(self, obj):
+        td = ((obj.completed_on or timezone.now()) - obj.created_on).total_seconds()
+        return td / obj._rows_logged 
+
+    def estimated_duration(self, obj):
+        remaining = obj.expected_num_rows - obj._rows_logged
+        seconds_remaining = remaining * self.seconds_per_row(obj)
+        return '%.2f minutes' % (seconds_remaining / 60)
+    
+    def get_queryset(self, *args, **kw):
+        return super().get_queryset(*args, **kw).annotate(
+            _rows_logged=models.Count('logentry', filter=models.Q(logentry__type='success')),
+        )
+    
     def get_logs_url(self, obj):
         return mark_safe("<a href='/logs/%s'>%s</a>" % (obj.id, 'logs'))
 
@@ -242,10 +281,15 @@ class JobTaskAdmin(admin.ModelAdmin):
         if obj.parent_recurring_task_id:
             return mark_safe("<a href='/admin/main/recurringtask/%s/'>%s</a>" % (obj.parent_recurring_task_id, obj.parent_recurring_task))
     
-    list_display = ['id', 'get_logs_url',
-                    'parent_job', 'get_parent_recurring_task',
-                    'created_on', 'completed_on', 'current_time',
-                    'num_rows', 'success_count', 'error_count', 'form_data']
+    list_display = [
+        'id', 'get_logs_url',
+        'parent_job', 'get_parent_recurring_task',
+        'estimated_duration',
+        'created_on', 'completed_on', 'current_time',
+        'num_rows', 'success_count', 'error_count', 'form_data',
+        'expected_num_rows',
+        'rows_logged', 'rows_per_second',
+    ]
     list_filter = [HasResultsListFilter, 'parent_recurring_task', 'parent_job']
     list_select_related = ['parent_recurring_task', 'parent_job']
     
@@ -271,3 +315,13 @@ class TaskBatch(models.Model):
 
     def get_absolute_url(self):
         return reverse("batch", [self.id])
+
+class LogAdmin(admin.ModelAdmin):
+    search_fields = ['data']
+    list_filter = ['type', 'task', 'task__parent_job', 'task__parent_recurring_task']
+    list_display = ['type', 'task', 'data']
+    list_select_related = ['task', 'task__parent_job', 'task__parent_recurring_task',
+                           'task__parent_recurring_task__parent_job']
+    readonly_fields = ['task', 'type', 'data']
+
+admin.site.register(LogEntry, LogAdmin)
