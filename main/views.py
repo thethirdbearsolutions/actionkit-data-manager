@@ -72,6 +72,11 @@ def job_results(request, result):
     return {"result": result}
 
 @enforce_2fa_setup
+@rendered_with("main/import_csv.html")
+def import_csv(request):
+    return {}
+
+@enforce_2fa_setup
 @allow_http("GET", "POST")
 @rendered_with("main/batch_job.html")
 def batch_job(request, type):

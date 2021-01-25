@@ -18,6 +18,7 @@ from basic_tasks.forms import (
     EventGeolocationForm,
     PublishReportResultsForm,
     ActionDeleteJobForm,
+    UserEraseForm,
     ActionModificationForm,
     OrderModificationForm,
     TransactionModificationForm,    
@@ -27,7 +28,8 @@ from basic_tasks.forms import (
     EventSignupModificationForm,
     CustomFieldJSONForm,
     CloudinaryImageForm,
-    PageCustomFieldJSONForm,    
+    PageCustomFieldJSONForm,
+    StoreDataForm
 )
 from basic_tasks.mailchimp import (
     MailchimpAddSubscriberForm,
@@ -35,6 +37,8 @@ from basic_tasks.mailchimp import (
     MailchimpRemoveSubscriberTagForm,    
 )
 
+register_task("StoreDataJob", "Store data locally", StoreDataForm)
+register_task("EraseUserJob", "Erase users (permanently forget, e.g. for GDPR)", UserEraseForm)
 register_task("TaskSyncJob", "Sync tags", TagSyncForm)
 register_task("CloudinaryImageJob", "Cloudinary", CloudinaryImageForm)
 register_task("MailchimpAddSubscriberJob", "Push subscriber info to Mailchimp",

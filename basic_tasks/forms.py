@@ -59,6 +59,49 @@ dthandler = lambda obj: obj.isoformat() if isinstance(obj, datetime.datetime) el
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template import defaultfilters 
 
+class StoreDataForm(BatchForm):
+
+    database_connection = forms.CharField(required=True)
+    local_table = forms.CharField(required=True)
+
+    def create_table(self, cur, header, tablename):
+        columns_statement = ', '.join([
+            '"%s" char(255)' % col for col in header
+        ])
+        sql = 'create unlogged table "%s" (%s)' % (tablename, columns_statement)
+        print(sql)
+        cur.execute(sql)
+    
+    def run(self, task, rows):
+        task_log = get_task_log()
+        cur = connections[self.cleaned_data['database_connection']].cursor()
+        n_rows = n_success = n_error = 0
+        
+        header = None
+        tablename = self.cleaned_data['local_table']
+        for row in rows:
+            n_rows += 1
+            task_log.sql_log(task, row)            
+            if not header:
+                header = row.keys()
+                
+                cur.execute("select * from information_schema.tables where table_name=%s",
+                            (tablename,))
+                if cur.rowcount == 0:
+                    self.create_table(cur, header, tablename)
+            columns_clause = ', '.join([
+                '"%s"' % col for col in header
+            ])
+            values_clause = ', '.join([
+                "'%s'" % str(val).strip() for val in row.values()
+            ])
+            sql = 'insert into "%s" (%s) values (%s)' % (tablename, columns_clause, values_clause)
+            task_log.activity_log(task, {'sql': sql})
+            
+            cur.execute(sql)
+            n_success += 1
+        return n_rows, n_success, n_error
+
 class TagSyncForm(BatchForm):
 
     ak_tag_prefix = forms.CharField(required=False)
@@ -71,7 +114,7 @@ class TagSyncForm(BatchForm):
 
         for row in rows:
             n_rows += 1
-
+            task_log.sql_log(task, row)
             try:
                 tag_id, did_something = self.find_or_create_tag(
                     task, 
@@ -490,6 +533,43 @@ Required columns: merge_from_user_id, merge_to_user_id, whose_address ("from" or
                 task_log.success_log(task, resp)
         return n_rows, n_success, n_error
 
+class UserEraseForm(BatchForm):
+    help_text = """
+    Required columns: user_id
+    """
+
+    def run(self, task, rows):
+        rest = RestClient()
+        rest.safety_net = False
+
+        n_rows = n_success = n_error = 0
+        task_log = get_task_log()
+
+        for row in rows:
+            task_log.sql_log(task, row)
+            n_rows += 1
+
+            try:
+                for field in 'user_id'.split():
+                    assert row.get(field) and int(row[field])
+            
+                resp = rest.eraser.create(
+                    user_id=row['user_id'],
+                    order_user_details=True,
+                    user_fields=True,
+                    action_fields=True,
+                    transactional_mailings=True,
+                )
+            except Exception as e:
+                n_error += 1
+                resp = {"log_id": row['merge_from_user_id'],
+                        'error': traceback.format_exc()}
+                task_log.error_log(task, resp)
+            else:
+                n_success += 1
+                task_log.success_log(task, resp)
+        return n_rows, n_success, n_error
+
     
 class UserfieldJobForm(BatchForm):
     help_text = """
@@ -650,7 +730,11 @@ class ActionDeleteJobForm(BatchForm):
             n_rows += 1
             assert row.get("action_id") and int(row['action_id'])
 
-            resp = rest.action.delete(id=row['action_id'])
+            try:
+                resp = rest.action.delete(id=row['action_id'])
+            except AssertionError as e:
+                resp = str(e)
+                
             if resp is not None:
                 n_error += 1
                 task_log.error_log(task, resp)

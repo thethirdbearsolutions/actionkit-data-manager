@@ -258,11 +258,17 @@ class JobTaskAdmin(admin.ModelAdmin):
         return obj._rows_logged
 
     def rows_per_second(self, obj):
-        return '%.2f' % (1 / self.seconds_per_row(obj))
+        try:
+            return '%.2f' % (1 / self.seconds_per_row(obj))
+        except Exception:
+            return 0
     
     def seconds_per_row(self, obj):
         td = ((obj.completed_on or timezone.now()) - obj.created_on).total_seconds()
-        return td / obj._rows_logged 
+        try:
+            return td / obj._rows_logged
+        except Exception:
+            return 0
 
     def estimated_duration(self, obj):
         remaining = obj.expected_num_rows - obj._rows_logged
